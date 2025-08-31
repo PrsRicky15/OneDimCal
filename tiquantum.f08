@@ -272,10 +272,11 @@ contains
         integer :: ir, istate
 
         open(11, file=filename, status='replace')
-        do ir = 1, nr
-            write(11,*) r_min + (ir - 1) * dr, &
+            do ir = 1, nr
+
+                write(11,*) r_min + (ir - 1) * dr, &
                     (eigvecs(ir, istate) + evals(istate), istate = 1, nstate)
-        enddo
+            enddo
         close(11)
     end subroutine printEigvecs_real
 
