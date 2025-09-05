@@ -102,8 +102,9 @@ module potential
     end type superMultiGauss
 
     type, extends(potential_base) :: ResonancePoten
-        real(dp) :: width = 0.1
-        real(dp) :: shift = -0.8
+        real(dp) :: width = 0.1_dp
+        real(dp) :: shift = -0.8_dp
+        real(dp) :: k0 = 1.0_dp
     contains
         procedure :: evaluate_real => evalResonancePoten_real
         procedure :: evaluate_complex => evalResonancePoten_complex
@@ -345,7 +346,7 @@ contains
         real(dp), intent(in) :: x
         real(dp) :: v
 
-        v = dexp(-this%width * x * x) * (x * x * 0.5_dp + this%shift)
+        v = dexp(-this%width * x * x) * (x * x * 0.5_dp * this%k0 + this%shift)
     end function evalResonancePoten_real
 
     function evalResonancePoten_complex(this, x) result(v)
@@ -353,7 +354,7 @@ contains
         complex(dp), intent(in) :: x
         complex(dp) :: v
 
-        v = cdexp(-this%width * x * x) * (x * x * 0.5_dp + this%shift)
+        v = cdexp(-this%width * x * x) * (x * x * 0.5_dp * this%k0 + this%shift)
     end function evalResonancePoten_complex
 
     function create_resonancePoten() result(pot)
