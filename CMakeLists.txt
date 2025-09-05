@@ -23,7 +23,7 @@ file(GLOB_RECURSE SOURCES "*.f08" "*.F08" "*.f" "*.F")
 add_executable(${PROJECT_NAME} constants.f08
                 main.f08
                 theta_trajectory.f08
-                eigen_sort.f08
+        matrix_solver.f08
                 tiquantum.f08)
 
 # Find BLAS and LAPACK libraries
@@ -44,6 +44,7 @@ target_link_libraries(${PROJECT_NAME}
         ${LAPACK_LIBRARIES}
         ${BLAS_LIBRARIES}
 )
+
 install(TARGETS ${PROJECT_NAME}
         RUNTIME DESTINATION bin
 )

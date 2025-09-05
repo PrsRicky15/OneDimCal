@@ -2,7 +2,7 @@ subroutine thetatraj_complex_scale
     use physical_constants
     use grid_parameters
     use quantum_solver
-    use eigenvalue_sorting
+    use matrix_algebra
     implicit none
 
     real(dp), allocatable :: t_matrix(:,:)

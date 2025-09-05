@@ -1,10 +1,10 @@
 module quantum_solver
     use physical_constants
     use grid_parameters
+    use matrix_algebra
     implicit none
     private
 
-    public :: solve_hamil_real, solve_hamil_complex
     public :: kinetic_energy_matrix, potential_energy_vector
     public :: superGauss_, Gauss_real
 
@@ -312,7 +312,7 @@ contains
             hmat(ir,ir) = hmat(ir,ir) + vVec(ir)
         enddo
 
-        call solve_hamil_real(hmat, eigval)
+        call solve_Hamil(hmat, eigval)
         call print_vector("gaussEigval.dat", eigval)
         call printEigvecs("gauss_eigvecs.dat", hmat, eigval, 20)
         deallocate(hmat, vVec)
@@ -334,66 +334,11 @@ contains
             hmat(ir,ir) = hmat(ir,ir) + vVec(ir)
         enddo
 
-        call solve_hamil_real(hmat, eigval)
+        call solve_Hamil(hmat, eigval)
         call print_vector("SuperGauss_Eigval.dat", eigval)
         call printEigvecs("SuperGauss_eigvecs.dat", hmat, eigval, 20)
 
         deallocate(hmat, vVec)
     end subroutine superGauss_
-    
-    SUBROUTINE solve_hamil_real(H, eigvals)
-      real(dp), intent(inout) :: H(:, :)
-      real(dp), intent(out) :: eigvals(:)
-      real(dp), allocatable :: WORK(:)
-      integer :: ndim, LDA, ldwork, info
-
-      external :: zgeev
-
-        ndim = size(h, 1)
-        LDA = ndim
-        LDWORK = 3 * ndim - 1
-        allocate(WORK(LDWORK))
-
-        CALL DSYEV('V', 'L', ndim, H, LDA, EIGVALS, WORK, LDWORK, info)
-
-        if (info /= 0) then
-            write(*,'(a,i0)') 'Error in ZGEEV: info = ', info
-            stop
-        end if
-        
-        deallocate(WORK)
-    end subroutine solve_hamil_real
-
-    subroutine solve_hamil_complex(h_matrix, eigenvalues, left_vectors, right_vectors)
-        complex(dp), intent(inout) :: h_matrix(:,:)
-        complex(dp), intent(out) :: eigenvalues(:)
-        complex(dp), intent(out) :: left_vectors(:,:)
-        complex(dp), intent(out) :: right_vectors(:,:)
-        
-        external :: zgeev
-        
-        integer :: n, lda, ldvl, ldvr, lwork, info
-        complex(dp), allocatable :: work(:)
-        real(dp), allocatable :: rwork(:)
-        
-        n = size(h_matrix, 1)
-        lda = n
-        ldvl = n
-        ldvr = n
-        lwork = 2*n
-        
-        allocate(work(lwork), rwork(2*n))
-        
-        call zgeev('V', 'V', n, h_matrix, lda, eigenvalues, &
-                   left_vectors, ldvl, right_vectors, ldvr, &
-                   work, lwork, rwork, info)
-        
-        if (info /= 0) then
-            write(*,'(a,i0)') 'Error in ZGEEV: info = ', info
-            stop
-        end if
-        
-        deallocate(work, rwork)
-    end subroutine solve_hamil_complex
     
 end module quantum_solver
