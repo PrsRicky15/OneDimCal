@@ -7,7 +7,7 @@ module quantum_solver
     private
 
     public :: kinetic_energy_matrix, potential_energy_vector
-    public :: print_vector
+    public :: real_Hamiltonian, print_vector, printPoten_grid, printEigvecs
 
     interface print_vector
         procedure printVec_real, printVec_complex
@@ -21,17 +21,9 @@ module quantum_solver
         procedure printEigvecs_real, printEigvecs_complex
     end interface printEigvecs
 
-    interface Gauss
-        procedure gaussian_real, gaussian_complex
-    end interface
-
     interface model_jol
         procedure potential_real, potential_complex
     end interface model_jol
-
-    interface superGauss
-        procedure superGauss_real, superGauss_complex
-    end interface superGauss
 
 contains
     
@@ -49,120 +41,6 @@ contains
         
         t_matrix = t_matrix / (dr * dr)
     end subroutine kinetic_energy_matrix
-
-    pure elemental real(dp) function gaussian_real(x, sigma, coef, displace, nbarrier) result(res)
-        real(dp), intent(in) :: x, sigma, coef, displace
-        integer, intent(in) :: nbarrier
-        integer :: igauss
-        real(dp) :: val, two_sigma2
-
-        two_sigma2 = 2 * sigma * sigma
-        res = zero
-
-        if ( mod(nbarrier, 2) == 0 ) then
-            do igauss = 1, nbarrier / 2
-                val = 0.5 * igauss * displace
-                res = res + dexp(-(x - val)**2/two_sigma2) &
-                                    + dexp(-(x + val)**2/two_sigma2)
-            enddo
-        else
-            res = dexp(-(x*x)/(2*sigma*sigma))
-            do igauss = 1, (nbarrier - 1)/2
-                val = igauss * displace
-                res = res + dexp(-(x - val)**2/two_sigma2) &
-                                    + dexp(-(x + val)**2/two_sigma2)
-            enddo
-        endif
-
-        res = res * coef
-        return
-    end function gaussian_real
-
-    pure elemental complex(dp) function gaussian_complex(x, sigma, coef, displace, nbarrier)
-        complex(dp), intent(in) :: x
-        real(dp), intent(in) :: sigma, coef, displace
-        integer, intent(in) :: nbarrier
-        integer :: igauss
-        real(dp) :: val, two_sigma2 
-
-        two_sigma2 = 2 * sigma * sigma
-        gaussian_complex = zero
-
-        if ( mod(nbarrier, 2) == 0 ) then
-            do igauss = 1, nbarrier / 2
-                val = 0.5 * igauss * displace
-                gaussian_complex = gaussian_complex + cdexp(-(x - val)**2/two_sigma2) &
-                                    + cdexp(-(x + val)**2/two_sigma2)
-            enddo
-        else
-            gaussian_complex = cdexp(-(x*x)/(2*sigma*sigma))
-            do igauss = 1, (nbarrier - 1)/2
-                val = igauss * displace
-                gaussian_complex = gaussian_complex + cdexp(-(x - val)**2/two_sigma2) &
-                                    + cdexp(-(x + val)**2/two_sigma2)
-            enddo
-        endif
-
-        gaussian_complex = gaussian_complex * coef
-        return
-    end function gaussian_complex
-
-    pure elemental real(dp) function superGauss_real(x, nbarrier, order, sigma, coef, displace)
-        real(dp), intent(in) :: x, sigma, coef, displace
-        integer, intent(in) :: order, nbarrier
-        integer :: igauss
-        real(dp) :: val, two_sigma2 
-
-        two_sigma2 = 2 * sigma * sigma
-        superGauss_real = zero
-
-        if ( mod(nbarrier, 2) == 0 ) then
-            do igauss = 1, nbarrier / 2
-                val = 0.5 * igauss * displace
-                superGauss_real = superGauss_real + dexp(-(x - val)**order/two_sigma2) &
-                        + dexp(-(x + val)**order/two_sigma2)
-            enddo
-        else
-            superGauss_real = dexp(-(x**order)/(2*sigma*sigma))
-            do igauss = 1, (nbarrier - 1) / 2
-                val = igauss * displace
-                superGauss_real = superGauss_real + dexp(-(x - val)**order/two_sigma2) &
-                        + dexp(-(x + val)**order/two_sigma2)
-            enddo
-        endif
-
-            superGauss_real = superGauss_real * coef
-        return
-    end function superGauss_real
-
-    pure elemental complex(dp) function superGauss_complex(x, nbarrier, order, sigma, coef, displace)
-        complex(dp), intent(in) :: x
-        real(dp), intent(in) :: sigma, coef, displace
-        integer, intent(in) :: order, nbarrier
-        integer :: igauss
-        real(dp) :: val, two_sigma2
-
-        two_sigma2 = 2 * sigma * sigma
-        superGauss_complex = zero
-
-        if ( mod(nbarrier, 2) == 0 ) then
-            do igauss = 1, nbarrier / 2
-                val = 0.5 * igauss * displace
-                superGauss_complex = superGauss_complex + cdexp(-(x - val)**order/two_sigma2) &
-                        + cdexp(-(x + val)**order/two_sigma2)
-            enddo
-        else
-            superGauss_complex = cdexp(-(x**order)/(2*sigma*sigma))
-            do igauss = 1, (nbarrier - 1) / 2
-                val = igauss * displace
-                superGauss_complex = superGauss_complex + cdexp(-(x - val)**order/two_sigma2) &
-                        + cdexp(-(x + val)**order/two_sigma2)
-            enddo
-        endif
-
-        superGauss_complex = superGauss_complex * coef
-        return
-    end function superGauss_complex
     
     pure elemental real(dp) function potential_real(x)
         real(dp), intent(in) :: x
@@ -175,34 +53,6 @@ contains
         potential_complex = cdexp(-0.1_dp * cx * cx) * (cx * cx * 0.5_dp - 0.8_dp)
        return
     end function potential_complex
-
-    subroutine potential_energy_real(sigma, coef, displace, nbarrier, v_vector)
-        integer, intent(in) :: nbarrier
-        real(dp), intent(in) :: sigma, coef, displace
-        real(dp), intent(out) :: v_vector(:)
-        integer :: i
-        real(dp) :: x
-        
-        do i = 1, nr
-            x = r_min + real(i-1, dp) * dr
-!            v_vector(i) = model_jol(x)
-            v_vector(i) = gauss(x, sigma, coef, displace, nbarrier)
-        end do
-
-    end subroutine potential_energy_real
-
-    subroutine potenSuperGauss_real(sigma, coef, order, displace, nbarrier, v_vector)
-        integer, intent(in) :: nbarrier, order
-        real(dp), intent(in) :: sigma, coef, displace
-        real(dp), intent(out) :: v_vector(:)
-        integer :: i
-        real(dp) :: x
-
-        do i = 1, nr
-            x = r_min + real(i-1, dp) * dr
-            v_vector(i) = superGauss(x, nbarrier, order, sigma, coef, displace)
-        end do
-    end subroutine potenSuperGauss_real
     
     subroutine potential_energy_vector(theta, v_vector)
         real(dp), intent(in) :: theta
@@ -219,7 +69,7 @@ contains
     end subroutine potential_energy_vector
 
     subroutine printPoten_real_grid(filename, vVec)
-        character, intent(in) :: filename
+        character(*), intent(in) :: filename
         real(dp), intent(in) :: vVec(:)
         integer :: ir
 
@@ -231,7 +81,7 @@ contains
     end subroutine printPoten_real_grid
 
     subroutine printPoten_complex_grid(filename, vVec)
-        character, intent(in) :: filename
+        character(*), intent(in) :: filename
         complex(dp), intent(in) :: vVec(:)
         integer :: ir
 
@@ -243,7 +93,7 @@ contains
     end subroutine printPoten_complex_grid
 
     subroutine printVec_real(filename, eigvals)
-        character, intent(in) :: filename
+        character(*), intent(in) :: filename
         real(dp), intent(in) :: eigvals(:)
         integer :: ir
 
@@ -255,7 +105,7 @@ contains
     end subroutine printVec_real
 
     subroutine printVec_complex(filename, eigvals)
-        character, intent(in) :: filename
+        character(*), intent(in) :: filename
         complex(dp), intent(in) :: eigvals(:)
         integer :: ir
 
@@ -267,7 +117,7 @@ contains
     end subroutine printVec_complex
 
     subroutine printEigvecs_real(filename, eigvecs, evals, nstate)
-        character, intent(in) :: filename
+        character(*), intent(in) :: filename
         integer, intent(in) :: nstate
         real(dp), intent(in) :: eigvecs(:,:), evals(:)
         integer :: ir, istate
@@ -282,7 +132,7 @@ contains
     end subroutine printEigvecs_real
 
     subroutine printEigvecs_complex(filename, eigvecs, evals, nstate)
-        character, intent(in) :: filename
+        character(*), intent(in) :: filename
         integer, intent(in) :: nstate
         complex(dp), intent(in) :: eigvecs(:,:)
         real(dp), intent(in) :: evals(:)
@@ -297,17 +147,16 @@ contains
         close(11)
     end subroutine printEigvecs_complex
 
-    subroutine Gauss_real(sigma, coef, displace, nbarrier)
-        integer, intent(in) :: nbarrier
-        real(dp), intent(in) :: sigma, coef, displace
+    subroutine real_Hamiltonian(potential)
+        class(potential_base), intent(in) :: potential
         real(dp), allocatable :: hmat(:, :), vVec(:)
         real(dp) :: eigval(nr)
         integer :: ir
 
         allocate(hmat(nr, nr), vVec(nr))
         call kinetic_energy_matrix(hmat)
-        call potential_energy_real(sigma, coef, displace, nbarrier, vVec)
-        call printPoten_grid("gaussPoten.dat", vVec)
+        call potential%onGrid(vVec)
+        call potential%printTofile("jolantha.dat")
 
         do ir = 1, nr
             hmat(ir,ir) = hmat(ir,ir) + vVec(ir)
@@ -317,31 +166,8 @@ contains
         call print_vector("gaussEigval.dat", eigval)
         call printEigvecs("gauss_eigvecs.dat", hmat, eigval, 20)
         deallocate(hmat, vVec)
-    end subroutine Gauss_real
+    end subroutine real_Hamiltonian
 
-    subroutine superGauss_(sigma, coef, order, displace, nbarrier)
-        integer, intent(in) :: nbarrier, order
-        real(dp), intent(in) :: sigma, coef, displace
-        real(dp), allocatable :: hmat(:, :), vVec(:)
-        real(dp) :: eigval(nr)
-        integer :: ir
-
-        allocate(hmat(nr, nr), vVec(nr))
-        call kinetic_energy_matrix(hmat)
-        call potenSuperGauss_real(sigma, coef, order, displace, nbarrier, vVec)
-        call printPoten_grid("SuperGauss_Poten.dat", vVec)
-
-        do ir = 1, nr
-            hmat(ir,ir) = hmat(ir,ir) + vVec(ir)
-        enddo
-
-        call solve_Hamil(hmat, eigval)
-        call print_vector("SuperGauss_Eigval.dat", eigval)
-        call printEigvecs("SuperGauss_eigvecs.dat", hmat, eigval, 20)
-
-        deallocate(hmat, vVec)
-    end subroutine superGauss_
-    
 end module quantum_solver
 
 module non_hemitian

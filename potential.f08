@@ -5,7 +5,7 @@ module potential
 
     ! Base potential Definition
     type, abstract :: potential_base
-        character(len=20) :: potential_type
+        character(len=40) :: potential_type
     contains
         procedure(evaluate_real), deferred :: evaluate_real
         procedure(evaluate_complex), deferred :: evaluate_complex
@@ -100,6 +100,14 @@ module potential
         procedure :: evaluate_real => evalSuperMultiGauss_real
         procedure :: evaluate_complex => evalSuperMultiGauss_complex
     end type superMultiGauss
+
+    type, extends(potential_base) :: ResonancePoten
+        real(dp) :: width = 0.1
+        real(dp) :: shift = -0.8
+    contains
+        procedure :: evaluate_real => evalResonancePoten_real
+        procedure :: evaluate_complex => evalResonancePoten_complex
+    end type ResonancePoten
 
 contains
 
@@ -332,6 +340,27 @@ contains
         end do
     end function evalSuperMultiGauss_complex
 
+    function evalResonancePoten_real(this, x) result(v)
+        class(ResonancePoten), intent(in) :: this
+        real(dp), intent(in) :: x
+        real(dp) :: v
+
+        v = dexp(-this%width * x * x) * (x * x * 0.5_dp + this%shift)
+    end function evalResonancePoten_real
+
+    function evalResonancePoten_complex(this, x) result(v)
+        class(ResonancePoten), intent(in) :: this
+        complex(dp), intent(in) :: x
+        complex(dp) :: v
+
+        v = cdexp(-this%width * x * x) * (x * x * 0.5_dp + this%shift)
+    end function evalResonancePoten_complex
+
+    function create_resonancePoten() result(pot)
+        type(ResonancePoten) :: pot
+        pot%potential_type = 'One-Bound_Resonances'
+    end function create_resonancePoten
+
     ! Constructor functions
     function create_harmonic(k, x0) result(pot)
         real(dp), intent(in) :: k, x0
@@ -478,7 +507,7 @@ contains
         call poly_pot%PrintToFile('quartic_potential.dat')
 
         ! Test General Polynomial: V = sum(coeffs(i) * (x-x0)^i)
-        coeffs = [0.0_dp, 0.0_dp, 1.0_dp, 0.0_dp, 0.2_dp]  ! quadratic + quartic
+        coeffs = [0.0_dp, 0.0_dp, 1.0_dp, 0.0_dp, 0.2_dp]
         poly_pot = create_polynomial(4, 0.0_dp, coeffs)
         call poly_pot%onGrid(v_array)
         call poly_pot%PrintToFile('polynomial_potential.dat')
