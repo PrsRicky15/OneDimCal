@@ -10,8 +10,14 @@ module potential
         procedure(evaluate_real), deferred :: evaluate_real
         procedure(evaluate_complex), deferred :: evaluate_complex
         generic :: evaluate => evaluate_real, evaluate_complex
-        procedure :: onGrid => potential_onGrid_real, potential_onGrid_complex
-        procedure :: PrintToFile => printPotToFile_real, printPotToFile_complex
+
+        procedure :: potential_onGrid_real
+        procedure :: potential_onGrid_complex
+        generic :: onGrid => potential_onGrid_real, potential_onGrid_complex
+
+        procedure :: printPotToFile_real
+        procedure :: printPotToFile_complex
+        generic :: PrintToFile => printPotToFile_real, printPotToFile_complex
     end type potential_base
 
     abstract interface
@@ -97,7 +103,7 @@ module potential
 
 contains
 
-    ! Evaluate potential on grid
+    ! Evaluate potential on grid (real)
     subroutine potential_onGrid_real(this, v_vector)
         class(potential_base), intent(in) :: this
         real(dp), intent(out) :: v_vector(:)
@@ -110,8 +116,8 @@ contains
         end do
     end subroutine potential_onGrid_real
 
-    ! Evaluate potential on grid
-    subroutine potential_onGrid_Complex(this, theta, v_vector)
+    ! Evaluate potential on grid (complex)
+    subroutine potential_onGrid_complex(this, theta, v_vector)
         class(potential_base), intent(in) :: this
         real(dp), intent(in) :: theta
         complex(dp), intent(out) :: v_vector(:)
@@ -120,21 +126,21 @@ contains
 
         do i = 1, nr
             x = r_min + real(i-1, dp) * dr
-            v_vector(i) = this%evaluate_complex(x * cdexp(i_unit * theta))
+            v_vector(i) = this%evaluate_complex(x * exp(cmplx(0.0_dp, theta, dp)))
         end do
-    end subroutine potential_onGrid_Complex
+    end subroutine potential_onGrid_complex
 
-    ! Print potential to file
+    ! Print potential to file (real)
     subroutine printPotToFile_real(this, filename)
         class(potential_base), intent(in) :: this
         character(len=*), intent(in) :: filename
         integer :: i, unit
         real(dp) :: x
 
-        open(newunit=unit, file=filename)
+        open(newunit=unit, file=filename, status='replace')
         do i = 1, nr
             x = r_min + real(i-1, dp) * dr
-            write(unit,*) x, this%evaluate_real(x)
+            write(unit,'(2ES15.6)') x, this%evaluate_real(x)
         end do
         close(unit)
     end subroutine printPotToFile_real
@@ -148,11 +154,11 @@ contains
         real(dp) :: x
         complex(dp) :: poten
 
-        open(newunit=unit, file=filename)
+        open(newunit=unit, file=filename, status='replace')
         do i = 1, nr
             x = r_min + real(i-1, dp) * dr
-            poten = this%evaluate_complex(x * cdexp(i_unit * theta))
-            write(unit,*) x, real(poten, dp), aimag(poten)
+            poten = this%evaluate_complex(x * exp(cmplx(0.0_dp, theta, dp)))
+            write(unit,'(3ES15.6)') x, real(poten, dp), aimag(poten)
         end do
         close(unit)
     end subroutine printPotToFile_complex
@@ -185,9 +191,13 @@ contains
         dx = x - this%x0
         v = 0.0_dp
 
-        do i = 0, this%order
-            v = v + this%coeffs(i) * dx**i
-        end do
+        ! Use Horner's method for efficiency
+        if (this%order >= 0) then
+            v = this%coeffs(this%order)
+            do i = this%order - 1, 0, -1
+                v = v * dx + this%coeffs(i)
+            end do
+        end if
     end function evalPolynomial_real
 
     function evalPolynomial_complex(this, x) result(v)
@@ -200,9 +210,13 @@ contains
         dx = x - this%x0
         v = 0.0_dp
 
-        do i = 0, this%order
-            v = v + this%coeffs(i) * dx**i
-        end do
+        ! Use Horner's method for efficiency
+        if (this%order >= 0) then
+            v = this%coeffs(this%order)
+            do i = this%order - 1, 0, -1
+                v = v * dx + this%coeffs(i)
+            end do
+        end if
     end function evalPolynomial_complex
 
     ! Morse potential evaluation
@@ -437,8 +451,8 @@ contains
         morse_pot = create_morse(D=5.0_dp, a=1.5_dp, re=2.0_dp)
         call morse_pot%onGrid(v_array)
         call morse_pot%onGrid(0.10d0, vz_array)
-        call morse_pot%PrintToFile('morse_potential.dat')
-        call morse_pot%PrintToFile(0.10d0, 'morse_potential.dat')
+        call morse_pot%PrintToFile('morse_potential_real.dat')
+        call morse_pot%PrintToFile(0.10d0, 'morse_potential_complex.dat')
 
         ! Test Multi-Gaussian Barriers
         multi_gauss_pot = create_multi_gaussian(amplitude=2.0_dp, sigma=0.5_dp, &
@@ -469,7 +483,7 @@ contains
         call poly_pot%onGrid(v_array)
         call poly_pot%PrintToFile('polynomial_potential.dat')
 
-        deallocate(v_array)
+        deallocate(v_array, vz_array)
     end subroutine test_potentials
 
 end module potential
