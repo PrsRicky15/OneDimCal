@@ -4,88 +4,179 @@ module potential
     implicit none
 
     ! Base potential Definition
-    type :: potential_base
+    type, abstract :: potential_base
         character(len=20) :: potential_type
     contains
-        procedure :: evaluate => evaluate_base
+        procedure(evaluate_real), deferred :: evaluate_real
+        procedure(evaluate_complex), deferred :: evaluate_complex
+        generic :: evaluate => evaluate_real, evaluate_complex
+        procedure :: onGrid => potential_onGrid_real, potential_onGrid_complex
+        procedure :: PrintToFile => printPotToFile_real, printPotToFile_complex
     end type potential_base
 
-    ! Potential Definition
-    type, extends(potential_base) :: harmonic_potential
+    abstract interface
+        function evaluate_real(this, x) result(v)
+            import :: potential_base, dp
+            class(potential_base), intent(in) :: this
+            real(dp), intent(in) :: x
+            real(dp) :: v
+        end function evaluate_real
+
+        function evaluate_complex(this, x) result(v)
+            import :: potential_base, dp
+            class(potential_base), intent(in) :: this
+            complex(dp), intent(in) :: x
+            complex(dp) :: v
+        end function evaluate_complex
+    end interface
+
+    ! Harmonic potential
+    type, extends(potential_base) :: harmonic
         real(dp) :: k          ! force constant
         real(dp) :: x0         ! equilibrium position
     contains
-        procedure :: evaluate => evaluate_harmonic
-    end type harmonic_potential
+        procedure :: evaluate_real => evalHarmonic_real
+        procedure :: evaluate_complex => evalHarmonic_complex
+    end type harmonic
 
-    type, extends(potential_base) :: polynomial_potential
+    ! Polynomial potential
+    type, extends(potential_base) :: polynomial
         integer :: order
         real(dp) :: x0         ! reference position
         real(dp), allocatable :: coeffs(:)  ! coefficients array (0:order)
     contains
-        procedure :: evaluate => evaluate_polynomial
-    end type polynomial_potential
+        procedure :: evaluate_real => evalPolynomial_real
+        procedure :: evaluate_complex => evalPolynomial_complex
+    end type polynomial
 
-    type, extends(potential_base) :: morse_potential
+    ! Morse potential
+    type, extends(potential_base) :: morse
         real(dp) :: D          ! dissociation energy
         real(dp) :: a          ! width parameter
         real(dp) :: re         ! equilibrium bond length
     contains
-        procedure :: evaluate => evaluate_morse
-    end type morse_potential
+        procedure :: evaluate_real => evalMorse_real
+        procedure :: evaluate_complex => evalMorse_complex
+    end type morse
 
-    type, extends(potential_base) :: gaussian_potential
+    ! Gaussian potential - single barrier
+    type, extends(potential_base) :: gaussian
         real(dp) :: amplitude  ! peak height
         real(dp) :: sigma      ! width parameter
         real(dp) :: x0         ! center position
     contains
-        procedure :: evaluate => evaluate_gaussian
-    end type gaussian_potential
+        procedure :: evaluate_real => evalGauss_real
+        procedure :: evaluate_complex => evalGauss_complex
+    end type gaussian
 
-    type, extends(gaussian_potential) :: multi_gaussian
+    ! Multi-Gaussian potential
+    type, extends(gaussian) :: multi_gaussian
         integer :: nbarrier    ! number of barriers
         real(dp) :: spacing    ! spacing between barriers
     contains
-        procedure :: evaluate => evaluate_multi_gaussian
+        procedure :: evaluate_real => evalMultiGauss_real
+        procedure :: evaluate_complex => evalMultiGauss_complex
     end type multi_gaussian
 
-    type, extends(gaussian_potential) :: SuperGauss
+    ! Super-Gaussian potential
+    type, extends(gaussian) :: SuperGauss
         integer :: norder
     contains
-        procedure :: evaluate => evaluate_SuperGauss
+        procedure :: evaluate_real => evalSuperGauss_real
+        procedure :: evaluate_complex => evalSuperGauss_complex
     end type SuperGauss
 
-    type, extends(SuperGauss) :: superMultiGauss_poten
+    ! Super Multi-Gaussian potential
+    type, extends(SuperGauss) :: superMultiGauss
         integer :: nbarrier    ! number of barriers
         real(dp) :: spacing    ! spacing between barriers
     contains
-        procedure :: evaluate => evaluate_superMultiGauss
-    end type superMultiGauss_poten
+        procedure :: evaluate_real => evalSuperMultiGauss_real
+        procedure :: evaluate_complex => evalSuperMultiGauss_complex
+    end type superMultiGauss
 
 contains
 
-    ! Base evaluation
-    function evaluate_base(this, x) result(v)
+    ! Evaluate potential on grid
+    subroutine potential_onGrid_real(this, v_vector)
         class(potential_base), intent(in) :: this
-        real(dp), intent(in) :: x
-        real(dp) :: v
+        real(dp), intent(out) :: v_vector(:)
+        integer :: i
+        real(dp) :: x
 
-        v = 0.0_dp
-        print *, "Warning: Base potential evaluate called"
-    end function evaluate_base
+        do i = 1, nr
+            x = r_min + real(i-1, dp) * dr
+            v_vector(i) = this%evaluate_real(x)
+        end do
+    end subroutine potential_onGrid_real
+
+    ! Evaluate potential on grid
+    subroutine potential_onGrid_Complex(this, theta, v_vector)
+        class(potential_base), intent(in) :: this
+        real(dp), intent(in) :: theta
+        complex(dp), intent(out) :: v_vector(:)
+        integer :: i
+        real(dp) :: x
+
+        do i = 1, nr
+            x = r_min + real(i-1, dp) * dr
+            v_vector(i) = this%evaluate_complex(x * cdexp(i_unit * theta))
+        end do
+    end subroutine potential_onGrid_Complex
+
+    ! Print potential to file
+    subroutine printPotToFile_real(this, filename)
+        class(potential_base), intent(in) :: this
+        character(len=*), intent(in) :: filename
+        integer :: i, unit
+        real(dp) :: x
+
+        open(newunit=unit, file=filename)
+        do i = 1, nr
+            x = r_min + real(i-1, dp) * dr
+            write(unit,*) x, this%evaluate_real(x)
+        end do
+        close(unit)
+    end subroutine printPotToFile_real
+
+    ! Print potential to file (complex version with theta)
+    subroutine printPotToFile_complex(this, theta, filename)
+        class(potential_base), intent(in) :: this
+        real(dp), intent(in) :: theta
+        character(len=*), intent(in) :: filename
+        integer :: i, unit
+        real(dp) :: x
+        complex(dp) :: poten
+
+        open(newunit=unit, file=filename)
+        do i = 1, nr
+            x = r_min + real(i-1, dp) * dr
+            poten = this%evaluate_complex(x * cdexp(i_unit * theta))
+            write(unit,*) x, real(poten, dp), aimag(poten)
+        end do
+        close(unit)
+    end subroutine printPotToFile_complex
 
     ! Harmonic oscillator evaluation
-    function evaluate_harmonic(this, x) result(v)
-        class(harmonic_potential), intent(in) :: this
+    function evalHarmonic_real(this, x) result(v)
+        class(harmonic), intent(in) :: this
         real(dp), intent(in) :: x
         real(dp) :: v
 
         v = 0.5_dp * this%k * (x - this%x0)**2
-    end function evaluate_harmonic
+    end function evalHarmonic_real
+
+    function evalHarmonic_complex(this, x) result(v)
+        class(harmonic), intent(in) :: this
+        complex(dp), intent(in) :: x
+        complex(dp) :: v
+
+        v = 0.5_dp * this%k * (x - this%x0)**2
+    end function evalHarmonic_complex
 
     ! Polynomial evaluation
-    function evaluate_polynomial(this, x) result(v)
-        class(polynomial_potential), intent(in) :: this
+    function evalPolynomial_real(this, x) result(v)
+        class(polynomial), intent(in) :: this
         real(dp), intent(in) :: x
         real(dp) :: v
         integer :: i
@@ -97,22 +188,64 @@ contains
         do i = 0, this%order
             v = v + this%coeffs(i) * dx**i
         end do
-    end function evaluate_polynomial
+    end function evalPolynomial_real
+
+    function evalPolynomial_complex(this, x) result(v)
+        class(polynomial), intent(in) :: this
+        complex(dp), intent(in) :: x
+        complex(dp) :: v
+        integer :: i
+        complex(dp) :: dx
+
+        dx = x - this%x0
+        v = 0.0_dp
+
+        do i = 0, this%order
+            v = v + this%coeffs(i) * dx**i
+        end do
+    end function evalPolynomial_complex
 
     ! Morse potential evaluation
-    function evaluate_morse(this, x) result(v)
-        class(morse_potential), intent(in) :: this
+    function evalMorse_real(this, x) result(v)
+        class(morse), intent(in) :: this
         real(dp), intent(in) :: x
         real(dp) :: v
         real(dp) :: exp_term
 
         exp_term = exp(-this%a * (x - this%re))
         v = this%D * (1.0_dp - exp_term)**2
-    end function evaluate_morse
+    end function evalMorse_real
 
-    ! Gaussian potential evaluation
-    function evaluate_gaussian(this, x) result(v)
-        class(gaussian_potential), intent(in) :: this
+    function evalMorse_complex(this, x) result(v)
+        class(morse), intent(in) :: this
+        complex(dp), intent(in) :: x
+        complex(dp) :: v
+        complex(dp) :: exp_term
+
+        exp_term = exp(-this%a * (x - this%re))
+        v = this%D * (1.0_dp - exp_term)**2
+    end function evalMorse_complex
+
+    ! Single Gaussian potential evaluation
+    function evalGauss_real(this, x) result(v)
+        class(gaussian), intent(in) :: this
+        real(dp), intent(in) :: x
+        real(dp) :: v
+
+        v = this%amplitude * exp(-0.5_dp * ((x - this%x0) / this%sigma)**2)
+    end function evalGauss_real
+
+    function evalGauss_complex(this, x) result(v)
+        class(gaussian), intent(in) :: this
+        complex(dp), intent(in) :: x
+        complex(dp) :: v
+
+        v = this%amplitude * exp(-0.5_dp * ((x - this%x0) / this%sigma)**2)
+    end function evalGauss_complex
+
+    ! Multi-Gaussian potential evaluation
+    function evalMultiGauss_real(this, x) result(v)
+        class(multi_gaussian), intent(in) :: this
         real(dp), intent(in) :: x
         real(dp) :: v
         integer :: i
@@ -123,11 +256,42 @@ contains
             center = this%x0 + real(i-1, dp) * this%spacing
             v = v + this%amplitude * exp(-0.5_dp * ((x - center) / this%sigma)**2)
         end do
-    end function evaluate_gaussian
+    end function evalMultiGauss_real
+
+    function evalMultiGauss_complex(this, x) result(v)
+        class(multi_gaussian), intent(in) :: this
+        complex(dp), intent(in) :: x
+        complex(dp) :: v
+        integer :: i
+        complex(dp) :: center
+
+        v = 0.0_dp
+        do i = 1, this%nbarrier
+            center = this%x0 + real(i-1, dp) * this%spacing
+            v = v + this%amplitude * exp(-0.5_dp * ((x - center) / this%sigma)**2)
+        end do
+    end function evalMultiGauss_complex
 
     ! Super-Gaussian potential evaluation
-    function evaluate_supergaussian(this, x) result(v)
-        class(supergaussian_potential), intent(in) :: this
+    function evalSuperGauss_real(this, x) result(v)
+        class(SuperGauss), intent(in) :: this
+        real(dp), intent(in) :: x
+        real(dp) :: v
+
+        v = this%amplitude * exp(-(abs(x - this%x0) / this%sigma)**this%norder)
+    end function evalSuperGauss_real
+
+    function evalSuperGauss_complex(this, x) result(v)
+        class(SuperGauss), intent(in) :: this
+        complex(dp), intent(in) :: x
+        complex(dp) :: v
+
+        v = this%amplitude * exp(-(abs(x - this%x0) / this%sigma)**this%norder)
+    end function evalSuperGauss_complex
+
+    ! Super Multi-Gaussian potential evaluation
+    function evalSuperMultiGauss_real(this, x) result(v)
+        class(superMultiGauss), intent(in) :: this
         real(dp), intent(in) :: x
         real(dp) :: v
         integer :: i
@@ -136,135 +300,176 @@ contains
         v = 0.0_dp
         do i = 1, this%nbarrier
             center = this%x0 + real(i-1, dp) * this%spacing
-            v = v + this%amplitude * exp(-(abs(x - center) / this%sigma)**this%order)
+            v = v + this%amplitude * exp(-(abs(x - center) / this%sigma)**this%norder)
         end do
-    end function evaluate_supergaussian
+    end function evalSuperMultiGauss_real
 
-    ! Unified potential energy subroutine
-    subroutine potential_onGrid(potential, v_vector)
-        class(potential_base), intent(in) :: potential
-        real(dp), intent(out) :: v_vector(:)
+    function evalSuperMultiGauss_complex(this, x) result(v)
+        class(superMultiGauss), intent(in) :: this
+        complex(dp), intent(in) :: x
+        complex(dp) :: v
         integer :: i
-        real(dp) :: x
+        complex(dp) :: center
 
-        do i = 1, nr
-            x = r_min + real(i-1, dp) * dr
-            v_vector(i) = potential%evaluate(x)
+        v = 0.0_dp
+        do i = 1, this%nbarrier
+            center = this%x0 + real(i-1, dp) * this%spacing
+            v = v + this%amplitude * exp(-(abs(x - center) / this%sigma)**this%norder)
         end do
-
-    end subroutine potential_onGrid
+    end function evalSuperMultiGauss_complex
 
     ! Constructor functions
-    function create_harmonic_potential(k, x0) result(pot)
+    function create_harmonic(k, x0) result(pot)
         real(dp), intent(in) :: k, x0
-        type(harmonic_potential) :: pot
+        type(harmonic) :: pot
 
         pot%potential_type = 'harmonic'
         pot%k = k
         pot%x0 = x0
-    end function create_harmonic_potential
+    end function create_harmonic
 
-    function create_polynomial_potential(order, x0, coeffs) result(pot)
+    function create_polynomial(order, x0, coeffs) result(pot)
         integer, intent(in) :: order
         real(dp), intent(in) :: x0
         real(dp), intent(in) :: coeffs(0:order)
-        type(polynomial_potential) :: pot
+        type(polynomial) :: pot
 
         pot%potential_type = 'polynomial'
         pot%order = order
         pot%x0 = x0
         allocate(pot%coeffs(0:order))
         pot%coeffs = coeffs
-    end function create_polynomial_potential
+    end function create_polynomial
 
-    function create_morse_potential(D, a, re) result(pot)
+    function create_morse(D, a, re) result(pot)
         real(dp), intent(in) :: D, a, re
-        type(morse_potential) :: pot
+        type(morse) :: pot
 
         pot%potential_type = 'morse'
         pot%D = D
         pot%a = a
         pot%re = re
-    end function create_morse_potential
+    end function create_morse
 
-    function create_gaussian_potential(amplitude, sigma, x0, nbarrier, spacing) result(pot)
-        real(dp), intent(in) :: amplitude, sigma, x0, spacing
-        integer, intent(in) :: nbarrier
-        type(gaussian_potential) :: pot
+    function create_gaussian(amplitude, sigma, x0) result(pot)
+        real(dp), intent(in) :: amplitude, sigma, x0
+        type(gaussian) :: pot
 
         pot%potential_type = 'gaussian'
         pot%amplitude = amplitude
         pot%sigma = sigma
         pot%x0 = x0
+    end function create_gaussian
+
+    function create_multi_gaussian(amplitude, sigma, x0, nbarrier, spacing) result(pot)
+        real(dp), intent(in) :: amplitude, sigma, x0, spacing
+        integer, intent(in) :: nbarrier
+        type(multi_gaussian) :: pot
+
+        pot%potential_type = 'multi_gaussian'
+        pot%amplitude = amplitude
+        pot%sigma = sigma
+        pot%x0 = x0
         pot%nbarrier = nbarrier
         pot%spacing = spacing
-    end function create_gaussian_potential
+    end function create_multi_gaussian
 
-    function create_supergaussian_potential(amplitude, sigma, x0, order, nbarrier, spacing) result(pot)
-        real(dp), intent(in) :: amplitude, sigma, x0, spacing
-        integer, intent(in) :: order, nbarrier
-        type(supergaussian_potential) :: pot
+    function create_SuperGauss(amplitude, sigma, x0, norder) result(pot)
+        real(dp), intent(in) :: amplitude, sigma, x0
+        integer, intent(in) :: norder
+        type(SuperGauss) :: pot
 
         pot%potential_type = 'supergaussian'
         pot%amplitude = amplitude
         pot%sigma = sigma
         pot%x0 = x0
-        pot%order = order
+        pot%norder = norder
+    end function create_SuperGauss
+
+    function create_superMultiGauss(amplitude, sigma, x0, norder, nbarrier, spacing) result(pot)
+        real(dp), intent(in) :: amplitude, sigma, x0, spacing
+        integer, intent(in) :: norder, nbarrier
+        type(superMultiGauss) :: pot
+
+        pot%potential_type = 'super_multi_gauss'
+        pot%amplitude = amplitude
+        pot%sigma = sigma
+        pot%x0 = x0
+        pot%norder = norder
         pot%nbarrier = nbarrier
         pot%spacing = spacing
-    end function create_supergaussian_potential
+    end function create_superMultiGauss
 
     ! Utility function to create quartic potential (common polynomial case)
-    function create_quartic_potential(x0, c0, c2, c4) result(pot)
+    function create_quartic(x0, c0, c2, c4) result(pot)
         real(dp), intent(in) :: x0, c0, c2, c4
-        type(polynomial_potential) :: pot
+        type(polynomial) :: pot
         real(dp) :: coeffs(0:4)
 
         coeffs = [c0, 0.0_dp, c2, 0.0_dp, c4]  ! V = c0 + c2*(x-x0)^2 + c4*(x-x0)^4
-        pot = create_polynomial_potential(4, x0, coeffs)
-    end function create_quartic_potential
+        pot = create_polynomial(4, x0, coeffs)
+    end function create_quartic
 
-    subroutine test_potentials
+    ! Test subroutine
+    subroutine test_potentials()
         implicit none
 
         ! Declare potential objects
-        type(harmonic_potential) :: harm_pot
-        type(morse_potential) :: morse_pot
-        type(gaussian_potential) :: gauss_pot
-        type(supergaussian_potential) :: super_pot
-        type(polynomial_potential) :: poly_pot
+        type(harmonic) :: harm_pot
+        type(morse) :: morse_pot
+        type(multi_gaussian) :: multi_gauss_pot
+        type(SuperGauss) :: super_pot
+        type(superMultiGauss) :: super_multi_pot
+        type(polynomial) :: poly_pot
 
         real(dp), allocatable :: v_array(:)
+        complex(dp), allocatable :: vz_array(:)
         real(dp) :: coeffs(0:4)
 
-        allocate(v_array(nr))
+        allocate(v_array(nr), vz_array(nr))
 
-        ! Harmonic Oscillator: V = 0.5 * k * (x - x0)^2
-        harm_pot = harmonic_poten(k=1.0_dp, x0=0.0_dp)
-        call potential_onGrid(harm_pot, v_array)
+        ! Test Harmonic Oscillator: V = 0.5 * k * (x - x0)^2
+        harm_pot = create_harmonic(k=1.0_dp, x0=0.0_dp)
+        call harm_pot%onGrid(v_array)
+        call harm_pot%PrintToFile('harmonic_potential.dat')
 
-        ! Morse Potential: V = D * (1 - exp(-a*(x-re)))^2
-        morse_pot = morse_poten(D=5.0_dp, a=1.5_dp, re=2.0_dp)
-        call potential_onGrid(morse_pot, v_array)
+        ! Test Morse Potential: V = D * (1 - exp(-a*(x-re)))^2
+        morse_pot = create_morse(D=5.0_dp, a=1.5_dp, re=2.0_dp)
+        call morse_pot%onGrid(v_array)
+        call morse_pot%onGrid(0.10d0, vz_array)
+        call morse_pot%PrintToFile('morse_potential.dat')
+        call morse_pot%PrintToFile(0.10d0, 'morse_potential.dat')
 
-        ! Gaussian Barriers
-        gauss_pot = gaussian_poten(amplitude=2.0_dp, sigma=0.5_dp, &
+        ! Test Multi-Gaussian Barriers
+        multi_gauss_pot = create_multi_gaussian(amplitude=2.0_dp, sigma=0.5_dp, &
                 x0=0.0_dp, nbarrier=3, spacing=2.0_dp)
-        call potential_onGrid(gauss_pot, v_array)
+        call multi_gauss_pot%onGrid(v_array)
+        call multi_gauss_pot%PrintToFile('multi_gaussian_potential.dat')
 
-        ! Super-Gaussian
-        super_pot = supergauss_poten(amplitude=1.5_dp, sigma=0.8_dp, &
-                x0=0.0_dp, order=4, nbarrier=2, spacing=3.0_dp)
-        call potential_onGrid(super_pot, v_array)
+        ! Test Super-Gaussian
+        super_pot = create_SuperGauss(amplitude=1.5_dp, sigma=0.8_dp, &
+                x0=0.0_dp, norder=4)
+        call super_pot%onGrid(v_array)
+        call super_pot%PrintToFile('super_gaussian_potential.dat')
 
-        ! Quartic Polynomial: V = c0 + c2*(x-x0)^2 + c4*(x-x0)^4
-        poly_pot = quartic_poten(x0=0.0_dp, c0=0.0_dp, c2=1.0_dp, c4=0.1_dp)
-        call potential_onGrid(poly_pot, v_array)
+        ! Test Super Multi-Gaussian
+        super_multi_pot = create_superMultiGauss(amplitude=1.5_dp, sigma=0.8_dp, &
+                x0=0.0_dp, norder=4, nbarrier=2, spacing=3.0_dp)
+        call super_multi_pot%onGrid(v_array)
+        call super_multi_pot%PrintToFile('super_multi_gaussian_potential.dat')
 
-        ! General Polynomial: V = sum(coeffs(i) * (x-x0)^i)
+        ! Test Quartic Polynomial: V = c0 + c2*(x-x0)^2 + c4*(x-x0)^4
+        poly_pot = create_quartic(x0=0.0_dp, c0=0.0_dp, c2=1.0_dp, c4=0.1_dp)
+        call poly_pot%onGrid(v_array)
+        call poly_pot%PrintToFile('quartic_potential.dat')
+
+        ! Test General Polynomial: V = sum(coeffs(i) * (x-x0)^i)
         coeffs = [0.0_dp, 0.0_dp, 1.0_dp, 0.0_dp, 0.2_dp]  ! quadratic + quartic
-        poly_pot = polynomial_poten(4, 0.0_dp, coeffs)
-        call potential_onGrid(poly_pot, v_array)
+        poly_pot = create_polynomial(4, 0.0_dp, coeffs)
+        call poly_pot%onGrid(v_array)
+        call poly_pot%PrintToFile('polynomial_potential.dat')
 
+        deallocate(v_array)
     end subroutine test_potentials
+
 end module potential

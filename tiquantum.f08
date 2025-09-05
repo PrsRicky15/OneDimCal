@@ -2,11 +2,11 @@ module quantum_solver
     use physical_constants
     use grid_parameters
     use matrix_algebra
+    use potential
     implicit none
     private
 
     public :: kinetic_energy_matrix, potential_energy_vector
-    public :: superGauss_, Gauss_real
     public :: print_vector
 
     interface print_vector
