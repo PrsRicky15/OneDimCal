@@ -49,16 +49,9 @@ subroutine thetatraj_complex_scale
         call solve_hamil_complex(h_matrix, eigenvalues, left_vecs, right_vecs)
 
         if (ith == 1) then
-
             call sort_eigenvalues_real(eigenvalues, left_vecs, right_vecs)
-
-            open(11, file='initial_eigenvalues.dat', status='replace')
-            do i = 1, nr
-                write(11, '(2es16.8)') real(eigenvalues(i), dp), aimag(eigenvalues(i))
-            end do
-            close(11)
+            call print_vector('real_eigenvals.dat', eigenvalues)
         else
-
             call sort_eigenvalues_overlap(eigenvalues, left_vecs, right_vecs, &
                     prev_right_vecs)
         end if
