@@ -22,7 +22,8 @@ file(GLOB_RECURSE SOURCES "*.f08" "*.F08" "*.f" "*.F")
 # Create executable
 add_executable(${PROJECT_NAME} constants.f08
                 main.f08
-        nhqmTI.f08
+        potential.f08
+        time_dependent.f08
         matrix_solver.f08
                 tiquantum.f08)
 
