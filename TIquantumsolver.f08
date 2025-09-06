@@ -1,5 +1,5 @@
 module quantum_solver
-    use grid_parameters
+    use grid_module
     use matrix_algebra
     use potential
     implicit none
@@ -111,7 +111,7 @@ contains
         do ir = 1, nr
             write(11,*) r_min + (ir - 1) * dr, &
                     (real(eigvecs(ir, istate), dp) + evals(istate), &
-                aimag(eigvecs(ir, istate)) + evals(istate), istate = 1, nstate)
+            aimag(eigvecs(ir, istate)) + evals(istate), istate = 1, nstate)
         enddo
         close(11)
     end subroutine printEigvecs_complex
@@ -124,8 +124,6 @@ contains
 
         allocate(hmat(nr, nr), vVec(nr))
         call kinetic_energy_matrix(hmat)
-        call potential%onGrid(vVec)
-        call potential%printTofile("jolantha.dat")
 
         do ir = 1, nr
             hmat(ir,ir) = hmat(ir,ir) + vVec(ir)
@@ -150,8 +148,6 @@ contains
         call kinetic_energy_matrix(tmat)
 
         allocate(hmat(nr, nr), vVec(nr))
-        call potential%onGrid(theta, vVec)
-        call potential%printTofile(theta, "jolantha.dat")
 
         do ir = 1, nr
             hmat(ir,ir) = hmat(ir,ir) + vVec(ir)

@@ -1,5 +1,5 @@
 module potential
-    use grid_parameters
+    use grid_module
     implicit none
 
     ! Base potential Definition
@@ -9,14 +9,6 @@ module potential
         procedure(evaluate_real), deferred :: evaluate_real
         procedure(evaluate_complex), deferred :: evaluate_complex
         generic :: evaluate => evaluate_real, evaluate_complex
-
-        procedure :: potential_onGrid_real
-        procedure :: potential_onGrid_complex
-        generic :: onGrid => potential_onGrid_real, potential_onGrid_complex
-
-        procedure :: printPotToFile_real
-        procedure :: printPotToFile_complex
-        generic :: PrintToFile => printPotToFile_real, printPotToFile_complex
     end type potential_base
 
     abstract interface
@@ -110,66 +102,6 @@ module potential
     end type ResonancePoten
 
 contains
-
-    ! Evaluate potential on grid (real)
-    subroutine potential_onGrid_real(this, v_vector)
-        class(potential_base), intent(in) :: this
-        real(dp), intent(out) :: v_vector(:)
-        integer :: i
-        real(dp) :: x
-
-        do i = 1, nr
-            x = r_min + real(i-1, dp) * dr
-            v_vector(i) = this%evaluate_real(x)
-        end do
-    end subroutine potential_onGrid_real
-
-    ! Evaluate potential on grid (complex)
-    subroutine potential_onGrid_complex(this, theta, v_vector)
-        class(potential_base), intent(in) :: this
-        real(dp), intent(in) :: theta
-        complex(dp), intent(out) :: v_vector(:)
-        integer :: i
-        real(dp) :: x
-
-        do i = 1, nr
-            x = r_min + real(i-1, dp) * dr
-            v_vector(i) = this%evaluate_complex(x * exp(cmplx(0.0_dp, theta, dp)))
-        end do
-    end subroutine potential_onGrid_complex
-
-    ! Print potential to file (real)
-    subroutine printPotToFile_real(this, filename)
-        class(potential_base), intent(in) :: this
-        character(len=*), intent(in) :: filename
-        integer :: i, unit
-        real(dp) :: x
-
-        open(newunit=unit, file=filename, status='replace')
-        do i = 1, nr
-            x = r_min + real(i-1, dp) * dr
-            write(unit,'(2ES15.6)') x, this%evaluate_real(x)
-        end do
-        close(unit)
-    end subroutine printPotToFile_real
-
-    ! Print potential to file (complex version with theta)
-    subroutine printPotToFile_complex(this, theta, filename)
-        class(potential_base), intent(in) :: this
-        real(dp), intent(in) :: theta
-        character(len=*), intent(in) :: filename
-        integer :: i, unit
-        real(dp) :: x
-        complex(dp) :: poten
-
-        open(newunit=unit, file=filename, status='replace')
-        do i = 1, nr
-            x = r_min + real(i-1, dp) * dr
-            poten = this%evaluate_complex(x * exp(cmplx(0.0_dp, theta, dp)))
-            write(unit,'(3ES15.6)') x, real(poten, dp), aimag(poten)
-        end do
-        close(unit)
-    end subroutine printPotToFile_complex
 
     ! Harmonic oscillator evaluation
     function evalHarmonic_real(this, x) result(v)
@@ -457,7 +389,8 @@ contains
     subroutine test_potentials(grid)
         implicit none
 
-        type(rgrid), intent(in) :: grid
+        type(rgrid), intent(inout) :: grid
+
         ! Declare potential objects
         type(harmonic) :: harm_pot
         type(morse) :: morse_pot
@@ -470,48 +403,33 @@ contains
         complex(dp), allocatable :: vz_array(:)
         real(dp) :: coeffs(0:4)
 
-        allocate(v_array(nr), vz_array(nr))
+        call grid%init_rgrid(-5.0_dp, 5.0_dp, 100)
+        allocate(v_array(grid%nr), vz_array(grid%nr))
 
         ! Test Harmonic Oscillator: V = 0.5 * k * (x - x0)^2
         harm_pot = create_harmonic(k=1.0_dp, x0=0.0_dp)
-        call harm_pot%onGrid(v_array)
-        call harm_pot%PrintToFile('harmonic_potential.dat')
 
         ! Test Morse Potential: V = D * (1 - exp(-a*(x-re)))^2
         morse_pot = create_morse(D=5.0_dp, a=1.5_dp, re=2.0_dp)
-        call morse_pot%onGrid(v_array)
-        call morse_pot%onGrid(0.10d0, vz_array)
-        call morse_pot%PrintToFile('morse_potential_real.dat')
-        call morse_pot%PrintToFile(0.10d0, 'morse_potential_complex.dat')
 
         ! Test Multi-Gaussian Barriers
         multi_gauss_pot = create_multi_gaussian(amplitude=2.0_dp, sigma=0.5_dp, &
                 x0=0.0_dp, nbarrier=3, spacing=2.0_dp)
-        call multi_gauss_pot%onGrid(v_array)
-        call multi_gauss_pot%PrintToFile('multi_gaussian_potential.dat')
 
         ! Test Super-Gaussian
         super_pot = create_SuperGauss(amplitude=1.5_dp, sigma=0.8_dp, &
                 x0=0.0_dp, norder=4)
-        call super_pot%onGrid(v_array)
-        call super_pot%PrintToFile('super_gaussian_potential.dat')
 
         ! Test Super Multi-Gaussian
         super_multi_pot = create_superMultiGauss(amplitude=1.5_dp, sigma=0.8_dp, &
                 x0=0.0_dp, norder=4, nbarrier=2, spacing=3.0_dp)
-        call super_multi_pot%onGrid(v_array)
-        call super_multi_pot%PrintToFile('super_multi_gaussian_potential.dat')
 
         ! Test Quartic Polynomial: V = c0 + c2*(x-x0)^2 + c4*(x-x0)^4
         poly_pot = create_quartic(x0=0.0_dp, c0=0.0_dp, c2=1.0_dp, c4=0.1_dp)
-        call poly_pot%onGrid(v_array)
-        call poly_pot%PrintToFile('quartic_potential.dat')
 
         ! Test General Polynomial: V = sum(coeffs(i) * (x-x0)^i)
         coeffs = [0.0_dp, 0.0_dp, 1.0_dp, 0.0_dp, 0.2_dp]
         poly_pot = create_polynomial(4, 0.0_dp, coeffs)
-        call poly_pot%onGrid(v_array)
-        call poly_pot%PrintToFile('polynomial_potential.dat')
 
         deallocate(v_array, vz_array)
     end subroutine test_potentials

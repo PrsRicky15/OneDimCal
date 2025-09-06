@@ -22,10 +22,7 @@ file(GLOB_RECURSE SOURCES "*.f08" "*.F08" "*.f" "*.F")
 # Create executable
 add_executable(${PROJECT_NAME} gridinfo.f08
                 main.f08
-        potential.f08
-        TDquantumSolver.f08
-        LinearAlgebra.f08
-        TIquantumsolver.f08)
+        potential.f08)
 
 # Find BLAS and LAPACK libraries
 find_package(BLAS REQUIRED)

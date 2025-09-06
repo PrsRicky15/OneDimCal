@@ -1,6 +1,4 @@
-
 module grid_module
-    use, intrinsic :: iso_fortran_env, only: real64, int32
     implicit none
 
     integer, parameter  :: dp = kind(1.0d0)
@@ -13,6 +11,23 @@ module grid_module
     complex(dp), parameter :: czero = (0.0_dp, 0.0_dp)
     complex(dp), parameter :: cone = (1.0_dp, 0.0_dp)
 
+    ! Abstract interfaces for potential evaluation (to be implemented by potential module)
+    abstract interface
+        function evaluate_real_interface(pot, x) result(v)
+            import :: dp
+            class(*), intent(in) :: pot
+            real(dp), intent(in) :: x
+            real(dp) :: v
+        end function evaluate_real_interface
+
+        function evaluate_complex_interface(pot, x) result(v)
+            import :: dp
+            class(*), intent(in) :: pot
+            complex(dp), intent(in) :: x
+            complex(dp) :: v
+        end function evaluate_complex_interface
+    end interface
+
     ! RGrid type definition
     type :: rgrid
         real(dp) :: rmin, rmax, dr, len, dk, kmin, kmax, cutoff_e
@@ -22,9 +37,14 @@ module grid_module
         logical :: k_grid_generated = .false.
     contains
         procedure :: init_rgrid
-        procedure :: genPoten => potential_onaGrid_real, potential_onaGrid_complex
-        procedure :: from_length => rgrid_from_length
-        procedure :: from_center_width => rgrid_from_center_width
+        procedure :: potential_onGrid_real
+        procedure :: potential_onGrid_complex
+        procedure :: printPotToFile_real
+        procedure :: printPotToFile_complex
+        generic :: genPoten => potential_onGrid_real, potential_onGrid_complex
+        generic :: printPotToFile => printPotToFile_real, printPotToFile_complex
+        procedure, nopass :: from_length => rgrid_from_length
+        procedure, nopass :: from_center_width => rgrid_from_center_width
         procedure :: generate_grid => rgrid_generate_grid
         procedure :: get_rgrid => rgrid_get_rgrid
         procedure :: get_kgrid => rgrid_get_kgrid
@@ -44,9 +64,14 @@ module grid_module
         logical :: omega_grid_generated = .false.
     contains
         procedure :: init_tgrid
-        procedure :: genPoten => potential_onaGrid_real, potential_onaGrid_complex
-        procedure :: from_duration => tgrid_from_duration
-        procedure :: from_sample_rate => tgrid_from_sample_rate
+        procedure :: potential_onGrid_real_t
+        procedure :: potential_onGrid_complex_t
+        procedure :: printPotToFile_real_t
+        procedure :: printPotToFile_complex_t
+        generic :: genPoten => potential_onGrid_real_t, potential_onGrid_complex_t
+        generic :: printPotToFile => printPotToFile_real_t, printPotToFile_complex_t
+        procedure, nopass :: from_duration => tgrid_from_duration
+        procedure, nopass :: from_sample_rate => tgrid_from_sample_rate
         procedure :: generate_grid => tgrid_generate_grid
         procedure :: get_grid => tgrid_get_grid
         procedure :: get_frequency_grid => tgrid_get_frequency_grid
@@ -184,6 +209,90 @@ contains
         print '(A,F0.6,A,F0.6,A)', "k range: [", minval(k_temp), ", ", maxval(k_temp), "]"
     end subroutine rgrid_display_momentum_info
 
+    ! Evaluate potential on rgrid (real) - using procedure pointer
+    subroutine potential_onGrid_real(this, inPot, eval_proc, v_vector)
+        class(rgrid), intent(inout) :: this
+        class(*), intent(in) :: inPot
+        procedure(evaluate_real_interface) :: eval_proc
+        real(dp), intent(out) :: v_vector(:)
+        integer :: i
+        real(dp) :: x
+
+        if (.not. this%grid_generated) then
+            call this%generate_grid()
+        end if
+
+        do i = 1, this%nr
+            x = this%rmin + real(i-1, dp) * this%dr
+            v_vector(i) = eval_proc(inPot, x)
+        end do
+    end subroutine potential_onGrid_real
+
+    ! Evaluate potential on rgrid (complex) - using procedure pointer
+    subroutine potential_onGrid_complex(this, inPot, eval_proc, theta, v_vector)
+        class(rgrid), intent(inout) :: this
+        class(*), intent(in) :: inPot
+        procedure(evaluate_complex_interface) :: eval_proc
+        real(dp), intent(in) :: theta
+        complex(dp), intent(out) :: v_vector(:)
+        integer :: i
+        real(dp) :: x
+
+        if (.not. this%grid_generated) then
+            call this%generate_grid()
+        end if
+
+        do i = 1, this%nr
+            x = this%rmin + real(i-1, dp) * this%dr
+            v_vector(i) = eval_proc(inPot, x * exp(cmplx(0.0_dp, theta, dp)))
+        end do
+    end subroutine potential_onGrid_complex
+
+    ! Print potential to file (real) for rgrid
+    subroutine printPotToFile_real(this, inPot, eval_proc, filename)
+        class(rgrid), intent(inout) :: this
+        class(*), intent(in) :: inPot
+        procedure(evaluate_real_interface) :: eval_proc
+        character(len=*), intent(in) :: filename
+        integer :: i, unit
+        real(dp) :: x
+
+        if (.not. this%grid_generated) then
+            call this%generate_grid()
+        end if
+
+        open(newunit=unit, file=filename, status='replace')
+        do i = 1, this%nr
+            x = this%rmin + real(i-1, dp) * this%dr
+            write(unit,'(2ES15.6)') x, eval_proc(inPot, x)
+        end do
+        close(unit)
+    end subroutine printPotToFile_real
+
+    ! Print potential to file (complex) for rgrid
+    subroutine printPotToFile_complex(this, inPot, eval_proc, theta, filename)
+        class(rgrid), intent(inout) :: this
+        class(*), intent(in) :: inPot
+        procedure(evaluate_complex_interface) :: eval_proc
+        real(dp), intent(in) :: theta
+        character(len=*), intent(in) :: filename
+        integer :: i, unit
+        real(dp) :: x
+        complex(dp) :: poten
+
+        if (.not. this%grid_generated) then
+            call this%generate_grid()
+        end if
+
+        open(newunit=unit, file=filename, status='replace')
+        do i = 1, this%nr
+            x = this%rmin + real(i-1, dp) * this%dr
+            poten = eval_proc(inPot, x * exp(cmplx(0.0_dp, theta, dp)))
+            write(unit,'(3ES15.6)') x, real(poten, dp), aimag(poten)
+        end do
+        close(unit)
+    end subroutine printPotToFile_complex
+
     subroutine rgrid_save_grid_to_file(this, filename)
         class(rgrid), intent(inout) :: this
         character(len=*), intent(in) :: filename
@@ -300,6 +409,90 @@ contains
         call fftshift_real(omega_temp, omega_shifted)
     end subroutine tgrid_get_shifted_frequency_grid
 
+    ! Evaluate potential on tgrid (real)
+    subroutine potential_onGrid_real_t(this, inPot, eval_proc, v_vector)
+        class(tgrid), intent(inout) :: this
+        class(*), intent(in) :: inPot
+        procedure(evaluate_real_interface) :: eval_proc
+        real(dp), intent(out) :: v_vector(:)
+        integer :: i
+        real(dp) :: t
+
+        if (.not. this%grid_generated) then
+            call this%generate_grid()
+        end if
+
+        do i = 1, this%nt
+            t = this%tmin + real(i-1, dp) * this%dt
+            v_vector(i) = eval_proc(inPot, t)
+        end do
+    end subroutine potential_onGrid_real_t
+
+    ! Evaluate potential on tgrid (complex)
+    subroutine potential_onGrid_complex_t(this, inPot, eval_proc, theta, v_vector)
+        class(tgrid), intent(inout) :: this
+        class(*), intent(in) :: inPot
+        procedure(evaluate_complex_interface) :: eval_proc
+        real(dp), intent(in) :: theta
+        complex(dp), intent(out) :: v_vector(:)
+        integer :: i
+        real(dp) :: t
+
+        if (.not. this%grid_generated) then
+            call this%generate_grid()
+        end if
+
+        do i = 1, this%nt
+            t = this%tmin + real(i-1, dp) * this%dt
+            v_vector(i) = eval_proc(inPot, t * exp(cmplx(0.0_dp, theta, dp)))
+        end do
+    end subroutine potential_onGrid_complex_t
+
+    ! Print potential to file (real) for tgrid
+    subroutine printPotToFile_real_t(this, inPot, eval_proc, filename)
+        class(tgrid), intent(inout) :: this
+        class(*), intent(in) :: inPot
+        procedure(evaluate_real_interface) :: eval_proc
+        character(len=*), intent(in) :: filename
+        integer :: i, unit
+        real(dp) :: t
+
+        if (.not. this%grid_generated) then
+            call this%generate_grid()
+        end if
+
+        open(newunit=unit, file=filename, status='replace')
+        do i = 1, this%nt
+            t = this%tmin + real(i-1, dp) * this%dt
+            write(unit,'(2ES15.6)') t, eval_proc(inPot, t)
+        end do
+        close(unit)
+    end subroutine printPotToFile_real_t
+
+    ! Print potential to file (complex) for tgrid
+    subroutine printPotToFile_complex_t(this, inPot, eval_proc, theta, filename)
+        class(tgrid), intent(inout) :: this
+        class(*), intent(in) :: inPot
+        procedure(evaluate_complex_interface) :: eval_proc
+        real(dp), intent(in) :: theta
+        character(len=*), intent(in) :: filename
+        integer :: i, unit
+        real(dp) :: t
+        complex(dp) :: poten
+
+        if (.not. this%grid_generated) then
+            call this%generate_grid()
+        end if
+
+        open(newunit=unit, file=filename, status='replace')
+        do i = 1, this%nt
+            t = this%tmin + real(i-1, dp) * this%dt
+            poten = eval_proc(inPot, t * exp(cmplx(0.0_dp, theta, dp)))
+            write(unit,'(3ES15.6)') t, real(poten, dp), aimag(poten)
+        end do
+        close(unit)
+    end subroutine printPotToFile_complex_t
+
     subroutine tgrid_display_grid(this)
         class(tgrid), intent(inout) :: this
 
@@ -351,5 +544,23 @@ contains
         if (allocated(this%grid)) deallocate(this%grid)
         if (allocated(this%omega_grid)) deallocate(this%omega_grid)
     end subroutine tgrid_cleanup
+
+    ! Helper subroutine for fftshift
+    subroutine fftshift_real(input, output)
+        real(dp), intent(in) :: input(:)
+        real(dp), intent(out) :: output(:)
+        integer :: n, mid
+
+        n = size(input)
+        mid = n/2
+
+        if (mod(n, 2) == 0) then
+            output(1:mid) = input(mid+1:n)
+            output(mid+1:n) = input(1:mid)
+        else
+            output(1:mid) = input(mid+2:n)
+            output(mid+1:n) = input(1:mid+1)
+        end if
+    end subroutine fftshift_real
 
 end module grid_module
