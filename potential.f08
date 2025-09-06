@@ -1,5 +1,4 @@
 module potential
-    use physical_constants
     use grid_parameters
     implicit none
 
@@ -455,9 +454,10 @@ contains
     end function create_quartic
 
     ! Test subroutine
-    subroutine test_potentials()
+    subroutine test_potentials(grid)
         implicit none
 
+        type(rgrid), intent(in) :: grid
         ! Declare potential objects
         type(harmonic) :: harm_pot
         type(morse) :: morse_pot

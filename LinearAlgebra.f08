@@ -1,9 +1,7 @@
 module matrix_algebra
-    use physical_constants
     use grid_parameters
     implicit none
-    
-    private :: complex_matmul
+
     public :: sort_eigenvalues_real, sort_eigenvalues_overlap
     public :: solve_Hamil, matmul
 

@@ -1,6 +1,6 @@
 program modern_quantum_solver
-    use quantum_solver
     use potential
+    use quantum_solver
     implicit none
     type(ResonancePoten) :: jol
     jol = create_resonancePoten()
