@@ -1,6 +1,5 @@
 program modern_quantum_solver
-    use potential
+    use test
     implicit none
-    type(ResonancePoten) :: jol
-    jol = create_resonancePoten()
+    call test_potentials
 end program modern_quantum_solver

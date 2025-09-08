@@ -1,32 +1,6 @@
 module grid_module
+    use potential
     implicit none
-
-    integer, parameter  :: dp = kind(1.0d0)
-    integer, parameter  :: sp = kind(1)
-    real(dp), parameter :: pi = 4.0_dp * atan(1.0_dp)
-    real(dp), parameter :: zero = 0.0_dp
-    real(dp), parameter :: one = 1.0_dp
-    real(dp), parameter :: pi_squared_over_six = pi*pi/6.0_dp
-    complex(dp), parameter :: i_unit = (0.0_dp, 1.0_dp)
-    complex(dp), parameter :: czero = (0.0_dp, 0.0_dp)
-    complex(dp), parameter :: cone = (1.0_dp, 0.0_dp)
-
-    ! Abstract interfaces for potential evaluation (to be implemented by potential module)
-    abstract interface
-        function evaluate_real_interface(pot, x) result(v)
-            import :: dp
-            class(*), intent(in) :: pot
-            real(dp), intent(in) :: x
-            real(dp) :: v
-        end function evaluate_real_interface
-
-        function evaluate_complex_interface(pot, x) result(v)
-            import :: dp
-            class(*), intent(in) :: pot
-            complex(dp), intent(in) :: x
-            complex(dp) :: v
-        end function evaluate_complex_interface
-    end interface
 
     ! RGrid type definition
     type :: rgrid
@@ -210,10 +184,9 @@ contains
     end subroutine rgrid_display_momentum_info
 
     ! Evaluate potential on rgrid (real) - using procedure pointer
-    subroutine potential_onGrid_real(this, inPot, eval_proc, v_vector)
+    subroutine potential_onGrid_real(this, inPot, v_vector)
         class(rgrid), intent(inout) :: this
-        class(*), intent(in) :: inPot
-        procedure(evaluate_real_interface) :: eval_proc
+        class(potential_base), intent(in) :: inPot
         real(dp), intent(out) :: v_vector(:)
         integer :: i
         real(dp) :: x
@@ -224,15 +197,14 @@ contains
 
         do i = 1, this%nr
             x = this%rmin + real(i-1, dp) * this%dr
-            v_vector(i) = eval_proc(inPot, x)
+            v_vector(i) = inPot%evaluate(x)
         end do
     end subroutine potential_onGrid_real
 
     ! Evaluate potential on rgrid (complex) - using procedure pointer
-    subroutine potential_onGrid_complex(this, inPot, eval_proc, theta, v_vector)
+    subroutine potential_onGrid_complex(this, inPot, theta, v_vector)
         class(rgrid), intent(inout) :: this
-        class(*), intent(in) :: inPot
-        procedure(evaluate_complex_interface) :: eval_proc
+        class(potential_base), intent(in) :: inPot
         real(dp), intent(in) :: theta
         complex(dp), intent(out) :: v_vector(:)
         integer :: i
@@ -244,15 +216,14 @@ contains
 
         do i = 1, this%nr
             x = this%rmin + real(i-1, dp) * this%dr
-            v_vector(i) = eval_proc(inPot, x * exp(cmplx(0.0_dp, theta, dp)))
+            v_vector(i) = inPot%evaluate(x *  cdexp(i_unit * theta))
         end do
     end subroutine potential_onGrid_complex
 
     ! Print potential to file (real) for rgrid
-    subroutine printPotToFile_real(this, inPot, eval_proc, filename)
+    subroutine printPotToFile_real(this, inPot, filename)
         class(rgrid), intent(inout) :: this
-        class(*), intent(in) :: inPot
-        procedure(evaluate_real_interface) :: eval_proc
+        class(potential_base), intent(in) :: inPot
         character(len=*), intent(in) :: filename
         integer :: i, unit
         real(dp) :: x
@@ -264,16 +235,15 @@ contains
         open(newunit=unit, file=filename, status='replace')
         do i = 1, this%nr
             x = this%rmin + real(i-1, dp) * this%dr
-            write(unit,'(2ES15.6)') x, eval_proc(inPot, x)
+            write(unit,'(2ES15.6)') x, inPot%evaluate(x)
         end do
         close(unit)
     end subroutine printPotToFile_real
 
     ! Print potential to file (complex) for rgrid
-    subroutine printPotToFile_complex(this, inPot, eval_proc, theta, filename)
+    subroutine printPotToFile_complex(this, inPot, theta, filename)
         class(rgrid), intent(inout) :: this
-        class(*), intent(in) :: inPot
-        procedure(evaluate_complex_interface) :: eval_proc
+        class(potential_base), intent(in) :: inPot
         real(dp), intent(in) :: theta
         character(len=*), intent(in) :: filename
         integer :: i, unit
@@ -287,7 +257,7 @@ contains
         open(newunit=unit, file=filename, status='replace')
         do i = 1, this%nr
             x = this%rmin + real(i-1, dp) * this%dr
-            poten = eval_proc(inPot, x * exp(cmplx(0.0_dp, theta, dp)))
+            poten = inPot%evaluate(x * cdexp(i_unit * theta))
             write(unit,'(3ES15.6)') x, real(poten, dp), aimag(poten)
         end do
         close(unit)
@@ -410,10 +380,9 @@ contains
     end subroutine tgrid_get_shifted_frequency_grid
 
     ! Evaluate potential on tgrid (real)
-    subroutine potential_onGrid_real_t(this, inPot, eval_proc, v_vector)
+    subroutine potential_onGrid_real_t(this, inPot, v_vector)
         class(tgrid), intent(inout) :: this
-        class(*), intent(in) :: inPot
-        procedure(evaluate_real_interface) :: eval_proc
+        class(potential_base), intent(in) :: inPot
         real(dp), intent(out) :: v_vector(:)
         integer :: i
         real(dp) :: t
@@ -424,15 +393,14 @@ contains
 
         do i = 1, this%nt
             t = this%tmin + real(i-1, dp) * this%dt
-            v_vector(i) = eval_proc(inPot, t)
+            v_vector(i) = inPot%evaluate(t)
         end do
     end subroutine potential_onGrid_real_t
 
     ! Evaluate potential on tgrid (complex)
-    subroutine potential_onGrid_complex_t(this, inPot, eval_proc, theta, v_vector)
+    subroutine potential_onGrid_complex_t(this, inPot, theta, v_vector)
         class(tgrid), intent(inout) :: this
-        class(*), intent(in) :: inPot
-        procedure(evaluate_complex_interface) :: eval_proc
+        class(potential_base), intent(in) :: inPot
         real(dp), intent(in) :: theta
         complex(dp), intent(out) :: v_vector(:)
         integer :: i
@@ -444,15 +412,14 @@ contains
 
         do i = 1, this%nt
             t = this%tmin + real(i-1, dp) * this%dt
-            v_vector(i) = eval_proc(inPot, t * exp(cmplx(0.0_dp, theta, dp)))
+            v_vector(i) = inPot%evaluate(t * cdexp(i_unit * theta))
         end do
     end subroutine potential_onGrid_complex_t
 
     ! Print potential to file (real) for tgrid
-    subroutine printPotToFile_real_t(this, inPot, eval_proc, filename)
+    subroutine printPotToFile_real_t(this, inPot, filename)
         class(tgrid), intent(inout) :: this
-        class(*), intent(in) :: inPot
-        procedure(evaluate_real_interface) :: eval_proc
+        class(potential_base), intent(in) :: inPot
         character(len=*), intent(in) :: filename
         integer :: i, unit
         real(dp) :: t
@@ -464,16 +431,15 @@ contains
         open(newunit=unit, file=filename, status='replace')
         do i = 1, this%nt
             t = this%tmin + real(i-1, dp) * this%dt
-            write(unit,'(2ES15.6)') t, eval_proc(inPot, t)
+            write(unit,'(2ES15.6)') t, inPot%evaluate(t)
         end do
         close(unit)
     end subroutine printPotToFile_real_t
 
     ! Print potential to file (complex) for tgrid
-    subroutine printPotToFile_complex_t(this, inPot, eval_proc, theta, filename)
+    subroutine printPotToFile_complex_t(this, inPot, theta, filename)
         class(tgrid), intent(inout) :: this
-        class(*), intent(in) :: inPot
-        procedure(evaluate_complex_interface) :: eval_proc
+        class(potential_base), intent(in) :: inPot
         real(dp), intent(in) :: theta
         character(len=*), intent(in) :: filename
         integer :: i, unit
@@ -487,7 +453,7 @@ contains
         open(newunit=unit, file=filename, status='replace')
         do i = 1, this%nt
             t = this%tmin + real(i-1, dp) * this%dt
-            poten = eval_proc(inPot, t * exp(cmplx(0.0_dp, theta, dp)))
+            poten = inPot%evaluate(t * cdexp(i_unit * theta))
             write(unit,'(3ES15.6)') t, real(poten, dp), aimag(poten)
         end do
         close(unit)
@@ -562,5 +528,4 @@ contains
             output(mid+1:n) = input(1:mid+1)
         end if
     end subroutine fftshift_real
-
 end module grid_module
