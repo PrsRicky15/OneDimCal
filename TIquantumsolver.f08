@@ -7,30 +7,6 @@ module quantum_solver
     public :: kinetic_energy_matrix, potential_energy_vector
     public :: real_Hamiltonian, print_vector, printPoten_grid, printEigvecs
 
-    type, abstract :: kinetic_base
-        class(rgrid) :: grid
-        real(dp), allocatable :: real_mat(:,:)
-        complex(dp), allocatable :: complex_mat(:,:)
-    contains
-        generic :: init => initial_real_ke, initial_complex_ke
-        procedure :: initial_real_ke, initial_complex_ke
-    end type kinetic_base
-
-    abstract interface
-        subroutine getKe(this)
-            import kinetic_base, dp
-            class(kinetic_base), intent(in) :: this
-            integer :: i, j
-        end subroutine getKe
-
-        subroutine getKe(this, theta)
-            import kinetic_base, dp
-            class(kinetic_base), intent(in) :: this
-            real(dp), intent(in) :: theta
-            integer :: i, j
-        end subroutine getKe
-    end interface
-
     interface print_vector
         procedure printVec_real, printVec_complex
     end interface print_vector
