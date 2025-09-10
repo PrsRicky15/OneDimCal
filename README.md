@@ -6,16 +6,6 @@ Useful for studying bound states, eigenvalues, and eigenfunctions of arbitrary 1
 
 ---
 
-## Theory
-
-We solve the stationary Schrödinger equation:
-$$
-\hat{H}\psi(x) = E\psi(x), \quad 
-\hat{H} = -\frac{\hbar^2}{2m}\frac{d^2}{dx^2} + V(x)
-$$
-
----
-
 ## Features
 
 - Build 1D Hamiltonians on a uniform grid
