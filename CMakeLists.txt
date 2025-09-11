@@ -26,10 +26,12 @@ add_executable(${PROJECT_NAME} potential.f08 gridinfo.f08
 # Find BLAS and LAPACK libraries
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
+find_package(FFTW3 REQUIRED)
 
 # Display found libraries (optional, for debugging)
 message(STATUS "BLAS libraries: ${BLAS_LIBRARIES}")
 message(STATUS "LAPACK libraries: ${LAPACK_LIBRARIES}")
+message(STATUS "FFTW3 libraries: ${FFTW3_LIBRARIES}")
 
 # Optional: Set output directory
 set_target_properties(${PROJECT_NAME} PROPERTIES
@@ -40,6 +42,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 target_link_libraries(${PROJECT_NAME}
         ${LAPACK_LIBRARIES}
         ${BLAS_LIBRARIES}
+        ${FFTW3_LIBRARIES}
 )
 
 install(TARGETS ${PROJECT_NAME}
