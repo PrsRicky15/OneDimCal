@@ -18,7 +18,7 @@ module kinetic_energy
         procedure :: delete
         procedure :: dimension
 
-        ! Deferred procedures (must be implemented by child types)
+        ! Deferred procedures for inheritance for different basis
         procedure(ke_interface_real), deferred :: getKe_real
         procedure(ke_interface_complex), deferred :: getKe_theta
         final :: destruct
