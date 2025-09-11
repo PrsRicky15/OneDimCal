@@ -5,8 +5,8 @@ module kinetic_energy
 
     type, abstract :: kinetic_base
         class(rgrid), allocatable :: grid
-        real(dp), allocatable :: real_mat(:,:), ke_real(:)
-        complex(dp), allocatable :: complex_mat(:,:), ke_complex(:)
+        real(dp), allocatable :: RKEmat(:,:), RKEvec(:)
+        complex(dp), allocatable :: ZKEmat(:,:), ZKEvec(:)
         real(dp) :: mass = 1.0_dp
         integer(sp) :: size = 0
     contains
@@ -45,10 +45,10 @@ contains
     subroutine delete(this)
         class(kinetic_base), intent(inout) :: this
 
-        if (allocated(this%ke_real)) deallocate(this%ke_real)
-        if (allocated(this%ke_complex)) deallocate(this%ke_complex)
-        if (allocated(this%real_mat)) deallocate(this%real_mat)
-        if (allocated(this%complex_mat)) deallocate(this%complex_mat)
+        if (allocated(this%RKEvec)) deallocate(this%RKEvec)
+        if (allocated(this%ZKEvec)) deallocate(this%ZKEvec)
+        if (allocated(this%RKEmat)) deallocate(this%RKEmat)
+        if (allocated(this%ZKEmat)) deallocate(this%ZKEmat)
         if (allocated(this%grid)) deallocate(this%grid)
 
         this%size = 0

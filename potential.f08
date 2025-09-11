@@ -384,7 +384,6 @@ contains
         pot%spacing = spacing
     end function create_superMultiGauss
 
-    ! Utility function to create quartic potential (common polynomial case)
     function create_quartic(x0, c0, c2, c4) result(pot)
         real(dp), intent(in) :: x0, c0, c2, c4
         type(polynomial) :: pot
