@@ -1,4 +1,7 @@
+! Created by prash on 9/10/2025.
+! Lapack library for linear algebra
 module matrix_algebra
+    use const
     implicit none
 
     public :: sort_eigenvalues_real, sort_eigenvalues_overlap

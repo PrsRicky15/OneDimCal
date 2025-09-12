@@ -1,3 +1,5 @@
+! Created by Prashant on 9/1/2025.
+! Time and real space grid structure
 module grid_module
     use potential
     implicit none
