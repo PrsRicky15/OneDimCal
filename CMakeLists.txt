@@ -21,7 +21,7 @@ file(GLOB_RECURSE SOURCES "*.f08" "*.F08" "*.f" "*.F")
 
 # Create executable
 add_executable(${PROJECT_NAME} potential.f08 gridinfo.f08
-                test.f08 main.f08)
+        derivative_operator.f08 test.f08 main.f08)
 
 # Find BLAS and LAPACK libraries
 find_package(BLAS REQUIRED)

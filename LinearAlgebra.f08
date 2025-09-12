@@ -1,5 +1,4 @@
 module matrix_algebra
-    use grid_module
     implicit none
 
     public :: sort_eigenvalues_real, sort_eigenvalues_overlap
