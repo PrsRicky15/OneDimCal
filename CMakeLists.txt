@@ -20,8 +20,8 @@ set(CMAKE_Fortran_FLAGS_RELEASE "-O3")
 file(GLOB_RECURSE SOURCES "*.f08" "*.F08" "*.f" "*.F")
 
 # Create executable
-add_executable(${PROJECT_NAME} potential.f08 gridinfo.f08
-        LinearAlgebra.f08 derivative_operator.f08
+add_executable(${PROJECT_NAME} constants.f08 potential.f08 gridinfo.f08
+        LinearAlgebra.f08 derivative_operator.f08 TIquantumsolver.f08
         test.f08 main.f08)
 
 # Find BLAS and LAPACK libraries

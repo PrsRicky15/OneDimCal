@@ -4,48 +4,27 @@ module derivative_operators
     use matrix_algebra
     implicit none
 
-    type, abstract :: momentum_base
-        class(rgrid), allocatable :: grid
-        real(dp), allocatable :: rmom_mat(:,:), rpvec(:)
-        complex(dp), allocatable :: zmom_mat(:,:), zpvec(:)
-        integer(sp) :: size = 0, error_unit = 201
-        logical :: is_constructed = .false.
-        logical :: complex = .false.
-    contains
-        ! Generic variable name for subroutine call
-        generic :: construct => construct_rKE, construct_zKE
-        generic :: exp => exprKE, expzKE
-        generic :: get_ke => getrKE, getzKE
-
-        ! Procedures
-        procedure :: construct_rmom, construct_zmom
-        procedure :: exp_rp, exp_zp
-        procedure :: delete, get_eig
-        procedure :: dimension
-
-        ! Deferred procedures for inheritance for different basis
-        procedure(ke_interface_real), deferred :: getrKE
-        procedure(ke_interface_complex), deferred :: getzKE
-    end type momentum_base
-
     type, abstract :: kinetic_base
         class(rgrid), allocatable :: grid
         real(dp), allocatable :: RKEmat(:,:), RKEvec(:)
         complex(dp), allocatable :: ZKEmat(:,:), ZKEvec(:)
         integer(sp) :: size = 0, error_unit = 201
-        real(dp) :: mass
+        integer(sp) :: iComplex = 0
+        real(dp) :: mass = 1.
         logical :: is_constructed = .false.
         logical :: complex = .false.
     contains
         ! Generic variable name for subroutine call
-        generic :: construct => construct_realKE, construct_complexKE
-        generic :: exp => expKE_real, expKE_complex
+        generic :: construct_ke => construct_realKE, construct_complexKE
+        generic :: expOp => expOp_real, expOp_real_mut, expOp_complex, expOp_complex_mut
         generic :: get_ke => getKE_real, getKE_complex
+        generic :: get_eig => get_eigr, get_eigz
 
         ! Procedures
         procedure :: construct_realKE, construct_complexKE
-        procedure :: expKE_real, expKE_complex
-        procedure :: delete, get_eig
+        procedure :: expOp_real, expOp_real_mut, expOp_complex, expOp_complex_mut
+        procedure :: get_eigr, get_eigz
+        procedure :: delete
         procedure :: dimension
 
         ! Deferred procedures for inheritance for different basis
@@ -63,16 +42,15 @@ module derivative_operators
     end type sinc_dvr
 
     abstract interface
-        subroutine ke_interface_real(this, mass)
+        subroutine ke_interface_real(this)
             import :: kinetic_base, dp
             class(kinetic_base), intent(inout) :: this
-            real(dp), intent(in) :: mass
         end subroutine ke_interface_real
 
-        subroutine ke_interface_complex(this, mass, theta)
+        subroutine ke_interface_complex(this, theta)
             import :: kinetic_base, dp
             class(kinetic_base), intent(inout) :: this
-            real(dp), intent(in) :: mass, theta
+            real(dp), intent(in) :: theta
         end subroutine ke_interface_complex
     end interface
 
@@ -130,18 +108,22 @@ contains
         this%is_constructed = .true.
 
         ! Calculate the kinetic energy matrix
-        call this%getKE_real(this%mass)
+        call this%getKE_real
     end subroutine construct_realKE
 
-    subroutine construct_complexKE(this, igrid, theta, imass)
+    subroutine construct_complexKE(this, igrid, imass, iComplex)
         class(kinetic_base), intent(inout) :: this
         class(rgrid), intent(in) :: igrid
-        real(dp), intent(in) :: theta
         real(dp), intent(in) :: imass
-
+        integer(sp), intent(in) :: iComplex
         integer :: alloc_stat
 
-        call this%delete()
+        if (iComplex == 0) then
+            write(this%error_unit, *) 'Error: 0 is for setting up real Ke-Matrix'
+            return
+        end if
+
+        call this%delete
 
         ! Allocate grid (more efficient than pointer)
         allocate(this%grid, source=igrid, stat=alloc_stat)
@@ -163,43 +145,38 @@ contains
         this%is_constructed = .true.
     end subroutine construct_complexKE
 
-    subroutine get_eig_real(this)
+    subroutine get_eigr(this, evals, eigvecs)
         class(kinetic_base), intent(in) :: this
-        call solve_Hamil(this)
-    end subroutine get_eig_real
+        real(dp), intent(out) :: evals(:), eigvecs(:,:)
 
-    subroutine get_eig_complex(this)
+        if (.not. this%is_constructed) then
+            write(this%error_unit, *) 'Kinetic energy is not constructed'
+            return
+        end if
+
+        eigvecs = this%RKEmat
+        call solve_Hamil(eigvecs, evals)
+    end subroutine get_eigr
+
+    subroutine get_eigz(this, evals, eigvecsL, eigvecsR)
         class(kinetic_base), intent(in) :: this
-        call solve_Hamil(this)
-    end subroutine get_eig_complex
+        complex(dp), intent(out) :: evals(:)
+        complex(dp), intent(out) :: eigvecsL(:,:), eigvecsR(:,:)
+        complex(dp), allocatable :: kemat(:,:)
 
-    ! Placeholder implementations for expKE procedures
-    subroutine expKE_real(this, dt, psi_in, psi_out)
-        class(kinetic_base), intent(in) :: this
-        real(dp), intent(in) :: dt
-        real(dp), intent(in) :: psi_in(:)
-        real(dp), intent(out) :: psi_out(:)
+        if (.not. this%is_constructed) then
+            write(this%error_unit, *) 'Kinetic energy is not constructed'
+            return
+        end if
 
-        ! Implementation would go here
-        ! This is a placeholder - actual implementation depends on your needs
-        psi_out = psi_in  ! Placeholder
-    end subroutine expKE_real
-
-    subroutine expKE_complex(this, dt, psi_in, psi_out)
-        class(kinetic_base), intent(in) :: this
-        complex(dp), intent(in) :: dt
-        complex(dp), intent(in) :: psi_in(:)
-        complex(dp), intent(out) :: psi_out(:)
-
-        ! Implementation would go here
-        ! This is a placeholder - actual implementation depends on your needs
-        psi_out = psi_in  ! Placeholder
-    end subroutine expKE_complex
+        allocate(kemat(this%size, this%size))
+        call solve_Hamil(kemat, evals, eigvecsL, eigvecsR)
+        deallocate(kemat)
+    end subroutine get_eigz
 
     ! Concrete implementations for sinc_dvr type
-    subroutine sinc_get_real(this, mass)
+    subroutine sinc_get_real(this)
         class(sinc_dvr), intent(inout) :: this
-        real(dp), intent(in) :: mass
 
         if (.not. this%is_constructed) then
             write(this%error_unit, *) 'Error: Kinetic energy object not constructed'
@@ -207,14 +184,12 @@ contains
         end if
 
         call this%compute_sinc_matrix()
-
-        ! Scale by mass factor
-        this%RKEmat = this%RKEmat / (2.0_dp * mass)
+        this%RKEmat = this%RKEmat
     end subroutine sinc_get_real
 
-    subroutine sinc_get_complex(this, mass, theta)
+    subroutine sinc_get_complex(this, theta)
         class(sinc_dvr), intent(inout) :: this
-        real(dp), intent(in) :: mass, theta
+        real(dp), intent(in) :: theta
 
         if (.not. this%is_constructed) then
             write(this%error_unit, *) 'Error: Kinetic energy object not constructed'
@@ -235,12 +210,45 @@ contains
         end if
 
         do i = 1, this%size
-            this%RKEmat(i, i) = pi_squared_over_six / (this%grid%dr ** 2)
+            this%RKEmat(i, i) = pi_squared_over_six / (this%mass * this%grid%dr ** 2)
             do j = 1, i - 1
-                this%RKEmat(i, j) = ((-one)**(i-j)) / ((i-j) * this%grid%dr)**2
+                this%RKEmat(i, j) = ((-one)**(i-j)) / (this%mass * ((i-j) * this%grid%dr)**2)
                 this%RKEmat(j, i) = this%RKEmat(i, j)
             end do
         end do
     end subroutine compute_sinc_matrix
+
+    ! Placeholder implementations for expKE procedures
+    subroutine expOp_real(this, dt, psi_in, psi_out)
+        class(kinetic_base), intent(in) :: this
+        real(dp), intent(in) :: dt
+        complex(dp), intent(in) :: psi_in(:)
+        complex(dp), intent(out) :: psi_out(:)
+        psi_out = psi_in  ! Placeholder
+    end subroutine expOp_real
+
+    subroutine expOp_real_mut(this, dt, psi_inout)
+        class(kinetic_base), intent(in) :: this
+        real(dp), intent(in) :: dt
+        real(dp), intent(inout) :: psi_inout(:)
+        psi_inout = 0.  ! Placeholder
+    end subroutine expOp_real_mut
+
+    subroutine expOp_complex(this, dt, psi_in, psi_out, dummy)
+        class(kinetic_base), intent(in) :: this
+        complex(dp), intent(in) :: dt
+        complex(dp), intent(in) :: psi_in(:)
+        complex(dp), intent(out) :: psi_out(:)
+        integer, intent(in) :: dummy
+        psi_out = psi_in  ! Placeholder
+    end subroutine expOp_complex
+
+    subroutine expOp_complex_mut(this, dt, psi_inout, dummy)
+        class(kinetic_base), intent(in) :: this
+        real(dp), intent(in) :: dt
+        complex(dp), intent(inout) :: psi_inout(:)
+        integer, intent(in) :: dummy
+        psi_inout = 0.  ! Placeholder
+    end subroutine expOp_complex_mut
 
 end module derivative_operators

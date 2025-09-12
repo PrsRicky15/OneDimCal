@@ -1,105 +1,107 @@
 module quantum_solver
-    use grid_module
-    use matrix_algebra
+    use derivative_operators
     implicit none
-    private
 
-    public :: kinetic_energy_matrix, potential_energy_vector
-    public :: real_Hamiltonian, print_vector, printPoten_grid, printEigvecs
+    type, extends(kinetic_base) :: Hamiltonian
+        real(dp), allocatable :: hmatr(:,:), eigr(:), eigvecs(:,:)
+        complex(dp), allocatable :: hmatz(:,:), eigz(:)
+        complex(dp), allocatable :: eigvecsL(:,:), eigvecsR(:,:)
+    contains
 
-    interface print_vector
-        procedure printVec_real, printVec_complex
-    end interface print_vector
+        ! Generic variable name for subroutine call
+        generic :: construct_hamil => construct_rhamil, construct_zhamil
+        generic :: expHOp => expHOp_real, expHOp_real_mut, expHOp_complex, expHOp_complex_mut
+        generic :: get_hamil => getH_real, getH_complex
+        generic :: getH_eig => getH_eigr, getH_eigz
 
-    interface printPoten_grid
-        procedure printPoten_real_grid, printPoten_complex_grid
-    end interface printPoten_grid
+        ! Procedures
+        procedure :: construct_realKE, construct_complexKE
+        procedure :: expOp_real, expOp_real_mut, expOp_complex, expOp_complex_mut
+        procedure :: get_eigr, get_eigz
+        procedure :: delete
+        procedure :: dimension
+        procedure :: printVec_real, printVec_complex
+        procedure :: printPoten_real_grid, printPoten_complex_grid
+        procedure :: printEigvecs_real, printEigvecs_complex
+        procedure :: thetatraj_complex_scale, cap_trajectory
 
-    interface printEigvecs
-        procedure printEigvecs_real, printEigvecs_complex
-    end interface printEigvecs
+        ! Deferred procedures for inheritance for different basis
+        procedure(hamil_interface_real), deferred :: getH_real
+        procedure(hamil_interface_complex), deferred :: getH_complex
+    end type Hamiltonian
 
 contains
-    
-    subroutine kinetic_energy_matrix(t_matrix)
-        real(dp), intent(out) :: t_matrix(:,:)
-        integer :: i, j
-        
-        do i = 1, nr
-            t_matrix(i, i) = pi_squared_over_six
-            do j = 1, i-1
-                t_matrix(i, j) = ((-one)**(i-j)) / real((i-j)**2, dp)
-                t_matrix(j, i) = t_matrix(i, j)
-            end do
-        end do
-        
-        t_matrix = t_matrix / (dr * dr)
-    end subroutine kinetic_energy_matrix
 
-    subroutine printPoten_real_grid(filename, vVec)
+    subroutine printPoten_real_grid(this, filename, vVec)
+        class(Hamiltonian), intent(inout) :: this
         character(*), intent(in) :: filename
         real(dp), intent(in) :: vVec(:)
         integer :: ir
 
         open(11, file=filename, status='replace')
             do ir = 1, size(vVec)
-                write(11,*) r_min + (ir-1) * dr, vVec(ir)
+                write(11,*) this%grid%rmin + (ir-1) * this%grid%dr, vVec(ir)
             enddo
         close(11)
     end subroutine printPoten_real_grid
 
-    subroutine printPoten_complex_grid(filename, vVec)
+    subroutine printPoten_complex_grid(this, filename, vVec)
+        class(Hamiltonian), intent(inout) :: this
         character(*), intent(in) :: filename
         complex(dp), intent(in) :: vVec(:)
         integer :: ir
 
         open(11, file=filename, status='replace')
             do ir = 1, size(vVec)
-                write(11,*) r_min + (ir-1) * dr, real(vVec(ir), dp), aimag(vVec(ir))
+                write(11,*) this%grid%rmin + (ir-1) * this%grid%dr, real(vVec(ir), dp), aimag(vVec(ir))
             enddo
         close(11)
     end subroutine printPoten_complex_grid
 
-    subroutine printVec_real(filename, eigvals)
+    subroutine printVec_real(this, filename, eigvals)
+        class(Hamiltonian), intent(inout) :: this
         character(*), intent(in) :: filename
         real(dp), intent(in) :: eigvals(:)
         integer :: ir
 
         open(11, file=filename, status='replace')
-            do ir = 1, nr
+            do ir = 1, this%grid%nr
                 write(11,*) eigvals(ir)
             enddo
         close(11)
     end subroutine printVec_real
 
-    subroutine printVec_complex(filename, eigvals)
+    subroutine printVec_complex(this, filename, eigvals)
+        class(Hamiltonian), intent(inout) :: this
         character(*), intent(in) :: filename
         complex(dp), intent(in) :: eigvals(:)
         integer :: ir
 
         open(11, file=filename, status='replace')
-        do ir = 1, nr
+        do ir = 1, this%grid%nr
             write(11,*) real(eigvals(ir), dp), aimag(eigvals(ir))
         enddo
         close(11)
     end subroutine printVec_complex
 
-    subroutine printEigvecs_real(filename, eigvecs, evals, nstate)
+    subroutine printEigvecs_real(this, filename, eigvecs, evals, nstate)
+        class(Hamiltonian), intent(inout) :: this
         character(*), intent(in) :: filename
         integer, intent(in) :: nstate
         real(dp), intent(in) :: eigvecs(:,:), evals(:)
         integer :: ir, istate
 
         open(11, file=filename, status='replace')
-            do ir = 1, nr
+            do ir = 1, this%grid%nr
 
-                write(11,*) r_min + (ir - 1) * dr, &
+                write(11,*) this%grid%rmin + (ir - 1) * this%grid%dr, &
                     (eigvecs(ir, istate) + evals(istate), istate = 1, nstate)
             enddo
         close(11)
     end subroutine printEigvecs_real
 
-    subroutine printEigvecs_complex(filename, eigvecs, evals, nstate)
+    subroutine printEigvecs_complex(this, filename, eigvecs, evals, nstate)
+        class(Hamiltonian), intent(inout) :: this
         character(*), intent(in) :: filename
         integer, intent(in) :: nstate
         complex(dp), intent(in) :: eigvecs(:,:)
@@ -107,24 +109,25 @@ contains
         integer :: ir, istate
 
         open(11, file=filename, status='replace')
-        do ir = 1, nr
-            write(11,*) r_min + (ir - 1) * dr, &
+        do ir = 1, this%grid%nr
+            write(11,*) this%grid%rmin + (ir - 1) * this%grid%dr, &
                     (real(eigvecs(ir, istate), dp) + evals(istate), &
             aimag(eigvecs(ir, istate)) + evals(istate), istate = 1, nstate)
         enddo
         close(11)
     end subroutine printEigvecs_complex
 
-    subroutine real_Hamiltonian(potential)
+    subroutine getH_real(this, potential)
+        class(Hamiltonian), intent(inout) :: this
         class(potential_base), intent(in) :: potential
         real(dp), allocatable :: hmat(:, :), vVec(:)
-        real(dp) :: eigval(nr)
+        real(dp) :: eigval(this%grid%nr)
         integer :: ir
 
-        allocate(hmat(nr, nr), vVec(nr))
+        allocate(hmat(this%grid%nr, this%grid%nr), vVec(this%grid%nr))
         call kinetic_energy_matrix(hmat)
 
-        do ir = 1, nr
+        do ir = 1, this%grid%nr
             hmat(ir,ir) = hmat(ir,ir) + vVec(ir)
         enddo
 
@@ -132,39 +135,36 @@ contains
         call print_vector("gaussEigval.dat", eigval)
         call printEigvecs("gauss_eigvecs.dat", hmat, eigval, 20)
         deallocate(hmat, vVec)
-    end subroutine real_Hamiltonian
+    end subroutine getH_real
 
-    subroutine complex_Hamiltonian(potential, theta)
+    subroutine getH_complex(self, potential, theta)
+        class(Hamiltonian), intent(inout) :: this
         class(potential_base), intent(in) :: potential
         real(dp), intent(in) :: theta
         real(dp), allocatable :: tmat(:,:)
         complex(dp), allocatable :: hmat(:, :), vVec(:)
         complex(dp), allocatable :: vecsL(:, :), vecsR(:)
-        complex(dp) :: eigval(nr)
+        complex(dp), allocatable :: eigval(:)
         integer :: ir
 
-        allocate(tmat)
+        allocate(tmat(this%grid%nr, this%grid%nr))
         call kinetic_energy_matrix(tmat)
 
-        allocate(hmat(nr, nr), vVec(nr))
+        allocate(hmat(this%grid%nr, this%grid%nr), vVec(this%grid%nr))
 
-        do ir = 1, nr
+        do ir = 1, this%grid%nr
             hmat(ir,ir) = hmat(ir,ir) + vVec(ir)
         enddo
 
+        allocate(eigval(this%grid%nr))
         call solve_Hamil(hmat, eigval)
         call print_vector("gaussEigval.dat", eigval)
         call printEigvecs("gauss_eigvecs.dat", hmat, eigval, 20)
         deallocate(hmat, vVec)
-    end subroutine complex_Hamiltonian
+    end subroutine getH_complex
 
     subroutine cap_trajectory(lmda_max, nlmda, Vcap)
-        use physical_constants
-        use grid_parameters
-        use quantum_solver
-        use matrix_algebra
-        implicit none
-
+        class(Hamiltonian), intent(inout) :: this
         real(dp), intent(in) :: lmda_max, Vcap(:)
         integer(sp), intent(in) :: nlmda
 
@@ -212,7 +212,7 @@ contains
 
             prev_right_vecs = right_vecs
             write(22, '(*(es16.8,1x))') (real(eigenvalues(i), dp), &
-                    aimag(eigenvalues(i)), i = 1, nr)
+                    aimag(eigenvalues(i)), i = 1, this%grid%nr)
         end do
         close(22)
 
@@ -228,13 +228,8 @@ contains
 
     end subroutine cap_trajectory
 
-    subroutine thetatraj_complex_scale(theta_max, ntheta)
-        use physical_constants
-        use grid_parameters
-        use quantum_solver
-        use matrix_algebra
-        implicit none
-
+    subroutine thetatraj_complex_scale(this, theta_max, ntheta)
+        class(Hamiltonian), intent(inout) :: this
         real(dp), intent(in) :: theta_max
         integer(sp), intent(in) :: ntheta
         real(dp), allocatable :: t_matrix(:,:)
@@ -249,11 +244,11 @@ contains
 
         dtheta = theta_max / real(ntheta - 1, dp)
 
-        allocate(t_matrix(nr, nr))
-        allocate(v_vector(nr), h_matrix(nr, nr))
-        allocate(eigenvalues(nr))
-        allocate(left_vecs(nr, nr), right_vecs(nr, nr))
-        allocate(prev_right_vecs(nr, nr))
+        allocate(t_matrix(this%grid%nr, this%grid%nr))
+        allocate(v_vector(this%grid%nr), h_matrix(this%grid%nr, this%grid%nr))
+        allocate(eigenvalues(this%grid%nr))
+        allocate(left_vecs(this%grid%nr, this%grid%nr), right_vecs(this%grid%nr, this%grid%nr))
+        allocate(prev_right_vecs(this%grid%nr, this%grid%nr))
 
         ! Calculate kinetic energy matrix (constant for all theta)
         call kinetic_energy_matrix(t_matrix)
@@ -272,7 +267,7 @@ contains
             call potential_energy_vector(theta, v_vector)
 
             phase_factor = exp(-2.0_dp * i_unit * theta)
-            do i = 1, nr
+            do i = 1, this%grid%nr
                 h_matrix(i, i) = t_matrix(i, i) * phase_factor + v_vector(i)
                 do j = 1, i-1
                     h_matrix(i, j) = t_matrix(i, j) * phase_factor
@@ -292,7 +287,7 @@ contains
 
             prev_right_vecs = right_vecs
             write(22, '(*(es16.8,1x))') (real(eigenvalues(i), dp), &
-                    aimag(eigenvalues(i)), i = 1, nr)
+                    aimag(eigenvalues(i)), i = 1, this%grid%nr)
         end do
         close(22)
 
